@@ -1,6 +1,7 @@
 import torch
 import pytorch_lightning as pl
 from torch import nn
+from torch_geometric.nn import GATConv
 
 from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 
@@ -46,18 +47,20 @@ class ESheafGCN(pl.LightningModule):
                  dataset):
         super(ESheafGCN, self).__init__()
         self.dataset = dataset
+
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
         self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim*2, 40)
-        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
-        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
+        self.conv2 = GATConv(latent_dim*2, latent_dim, 1, )
+        self.conv3 = GATConv(latent_dim, latent_dim, 1, )
         self.adj = self.dataset.adjacency_matrix
         degree = self.adj.sum(dim=1)
         degree_inv_sqrt = torch.pow(degree, -0.5)
         degree_inv_sqrt[torch.isinf(degree_inv_sqrt)] = 0
         diag_degree_inv_sqrt = torch.diag(degree_inv_sqrt)
         self.normalized_adj = diag_degree_inv_sqrt @ self.adj @ diag_degree_inv_sqrt
-        self.adj = self.normalized_adj
+        self.adj = self.normalized_adj.to(self.device_id)
+        self.train_edge_index = self.dataset.train_edge_index
         self.init_parameters()
 
     def init_weights(self, layer):
@@ -66,13 +69,14 @@ class ESheafGCN(pl.LightningModule):
     def init_parameters(self):
         nn.init.normal_(self.embedding.weight, std=0.1)
         self.sheaf_conv1.fc_smat.apply(self.init_weights)
-        self.sheaf_conv2.fc_smat.apply(self.init_weights)
-        self.sheaf_conv3.fc_smat.apply(self.init_weights)
 
     def forward(self, adj_matrix):
        emb0 = self.embedding.weight
-       xmap, y = self.sheaf_conv1(adj_matrix, emb0)
-       return emb0, xmap, y
+       xmap, y1 = self.sheaf_conv1(adj_matrix, emb0)
+       emb2 = self.conv2(y1, self.train_edge_index)
+       emb3 = self.conv3(emb2, self.train_edge_index)
+
+       return emb0, xmap, emb3
 
     def training_step(self, batch, batch_idx):
         users, pos_items, neg_items = batch

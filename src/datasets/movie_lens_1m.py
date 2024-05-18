@@ -37,10 +37,11 @@ class MovieLensDataset(Dataset):
         self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
 
     def __len__(self):
-        return len(self.user_ids)
+        return self.pandas_data.shape[0]
 
     def __getitem__(self, idx):
-        row = self.interacted_items_by_user_idx.iloc[idx]
+        user_idx = self.pandas_data["user_id_idx"].iloc[idx]
+        row = self.interacted_items_by_user_idx.iloc[user_idx]
         user_idx = row["user_id_idx"]
         pos_item_idx = random.choice(row["item_id_idx"])
         neg_item_idx = self.sample_neg(row["item_id_idx"])
