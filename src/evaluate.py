@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 from math import log
 
-from src.models.ESheafGCN import ESheafGCN
+from src.models.ESheafGCN import ESheafGCN, ESheafGCN_wo_embed
 from src.models.SheafGCN import SheafGCN
 from src.models.LightGCN import GCN
 
@@ -32,18 +32,21 @@ def ndcg_at_k(r, k):
 # Recommended movies ID
 
 if __name__ == "__main__":
-    FILE_NAME = "../data/ml-1m/ratings.dat"
+    FILE_NAME = "data/ml-1m/ratings.dat"
     with open('dataset.pickle', 'rb') as handle:
         ml_data_module = pickle.load(handle)
     ml_1m_train = ml_data_module.train_dataset
     ml_1m_test = ml_data_module.test_dataset
-    CHECKPOINT_PATH = "lightning_logs/version_14/checkpoints/epoch=27-step=168.ckpt"
+    CHECKPOINT_PATH = "lightning_logs/version_4/checkpoints/epoch=20-step=126.ckpt"
 #    CHECKPOINT_PATH = "gcn.ckpt"
-    model = GCN.load_from_checkpoint(CHECKPOINT_PATH, dataset=ml_1m_train, latent_dim=64)
+    # model = GCN.load_from_checkpoint(CHECKPOINT_PATH, dataset=ml_1m_train, latent_dim=64)
+    model = ESheafGCN_wo_embed.load_from_checkpoint(CHECKPOINT_PATH, latent_dim=40, dataset=ml_1m_train, learn_embeds=False)
     model.eval()
     with torch.no_grad():
-        emb0, xmap = model(ml_1m_train.train_edge_index)
-        final_user_Embed, final_item_Embed = torch.split(emb0, (ml_1m_train.num_users, ml_1m_train.num_items))
+        # emb0, xmap = model(ml_1m_train.train_edge_index) # GCN
+        emb0, xmap, y = model(model.adj)
+        # final_user_Embed, final_item_Embed = torch.split(emb0, (ml_1m_train.num_users, ml_1m_train.num_items))
+        final_user_Embed, final_item_Embed = torch.split(y, (ml_1m_train.num_users, ml_1m_train.num_items))
 
     res = ml_1m_test.interacted_items_by_user_idx.copy(deep=True)
     res["reco"] = res.progress_apply(lambda x: evaluate(x["user_id_idx"], final_user_Embed, final_item_Embed), axis=1)
