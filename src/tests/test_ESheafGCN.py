@@ -20,19 +20,19 @@ class TestSheaf_NNet(TestCase):
         adj_matrix_sparse = torch.squeeze(to_dense_adj(edge_index))
 
         conv = Sheaf_Conv_fixed(2, 6, 6)
-        a1, a2 = conv.forward(adj_matrix_sparse, x)
-        print(a1, a2)
+        a1, a2, rmat = conv.forward(adj_matrix_sparse, x)
+        print(rmat)
 
-    def test(self):
+    def test_2(self):
 
         # Assuming you have the tensors 'smat' and 'y'
-        smat = torch.randn(3, 4, 4)
-        y = torch.randn(3, 4)
+        smat = torch.randn(4, 6, 2)
 
-        result = torch.diagonal(torch.tensordot(smat, y, dims=([1], [1])), dim1=0, dim2=2)
+        result = torch.diagonal(torch.tensordot(smat, smat, dims=([2], [2])), dim1=0, dim2=2)
+        print(result.shape)
 
         # Vectorizing the operation in one step
-        vectorized_result = torch.einsum('ijk,ik->kj', smat, y)
+        vectorized_result = torch.einsum('ijk,ilk->lji', smat, smat)
 
         # Check if the results are the same
         print(result)
