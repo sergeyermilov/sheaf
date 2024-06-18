@@ -9,7 +9,7 @@ from sklearn import preprocessing as pp
 from torch_geometric.utils import to_dense_adj
 
 
-class MovieLensDataset(Dataset):
+class YahooMoviesDataset(Dataset):
     def __init__(self, df):
         # Unique user and items ids as numpy array
         self.pandas_data = df
@@ -50,12 +50,12 @@ class MovieLensDataset(Dataset):
             if neg_id not in x:
                 return neg_id
 
-class MovieLensDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='::', batch_size=32):
+class YahooMoviesDataModule(LightningDataModule):
+    def __init__(self, ratings_file, sep='\t', batch_size=32):
         super().__init__()
         self.batch_size = batch_size
 
-        COLUMNS_NAME = ['user_id', 'item_id', 'rating', "timestamp"]
+        COLUMNS_NAME = ['user_id', 'item_id', 'full_rating', "rating"]
         self.pandas_data = pd.read_csv(ratings_file, sep=sep, names=COLUMNS_NAME, engine='python')
         self.pandas_data = self.pandas_data[self.pandas_data['rating'] >= 3]
 
@@ -93,9 +93,9 @@ class MovieLensDataModule(LightningDataModule):
 
     def setup(self):
         # Assign train/val datasets for use in dataloaders
-        self.train_dataset = MovieLensDataset(self.train_df)
-        self.val_dataset = MovieLensDataset(self.val_df)
-        self.test_dataset = MovieLensDataset(self.test_df)
+        self.train_dataset = YahooMoviesDataset(self.train_df)
+        self.val_dataset = YahooMoviesDataset(self.val_df)
+        self.test_dataset = YahooMoviesDataset(self.test_df)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size)
