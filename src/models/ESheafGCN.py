@@ -118,9 +118,10 @@ class ESheafGCN_wo_embed(pl.LightningModule):
         if self.learn_embeds:
             self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
-        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
-        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
-        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
+        # self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
+        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim // 2, 40)
+        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim // 2, 40)
+        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim // 2, 40)
         self.adj = self.dataset.adjacency_matrix
         degree = self.adj.sum(dim=1)
         degree_inv_sqrt = torch.pow(degree, -0.5)

@@ -29,18 +29,9 @@ class MovieLensDataset(Dataset):
         self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(
             list).reset_index()
         
-        # mn = 1e10
-        # mx = 0
-        # for i in self.interacted_items_by_user_idx['item_id_idx']:
-        #     mn = min(mn, min(i))
-        #     mx = max(mx, max(i))
-        # print(mn, mx)
 
         u_t = torch.LongTensor(self.pandas_data.user_id_idx.values)
         i_t = torch.LongTensor(self.pandas_data.item_id_idx.values) + self.num_users
-        # print('aaa', u_t.min(), u_t.max())
-        # print('aaa', i_t.min(), i_t.max())
-        # exit()
 
 
         self.train_edge_index = torch.stack((
@@ -51,14 +42,24 @@ class MovieLensDataset(Dataset):
         self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
 
     def __len__(self):
-        return len(self.user_ids)
+        # return len(self.user_ids)
+        return len(self.pandas_data)
+
+    # def __getitem__(self, idx):
+    #     # raise NotImplementedError
+    #     row = self.interacted_items_by_user_idx.iloc[idx]
+    #     user_idx = row["user_id_idx"]
+    #     pos_item_idx = random.choice(row["item_id_idx"]) + self.num_users
+    #     neg_item_idx = self.sample_neg(row["item_id_idx"]) + self.num_users
+    #     return torch.tensor(user_idx), torch.tensor(pos_item_idx), torch.tensor(neg_item_idx)
 
     def __getitem__(self, idx):
         # raise NotImplementedError
-        row = self.interacted_items_by_user_idx.iloc[idx]
+        row = self.pandas_data.iloc[idx]
         user_idx = row["user_id_idx"]
-        pos_item_idx = random.choice(row["item_id_idx"]) + self.num_users
-        neg_item_idx = self.sample_neg(row["item_id_idx"]) + self.num_users
+        pos_item_idx = row["item_id_idx"] + self.num_users
+        all_pos = self.interacted_items_by_user_idx[self.interacted_items_by_user_idx["user_id_idx"] == user_idx].item_id_idx
+        neg_item_idx = self.sample_neg(all_pos) + self.num_users
         return torch.tensor(user_idx), torch.tensor(pos_item_idx), torch.tensor(neg_item_idx)
 
     def sample_neg(self, x):
@@ -116,19 +117,15 @@ class MovieLensDataModule(LightningDataModule):
         self.val_dataset = MovieLensDataset(self.val_df)
         self.test_dataset = MovieLensDataset(self.test_df)
         if not self.learn_embeds:
-            all_embeds = self.build_embeds(self.train_dataset)
+            all_embeds = self.build_embeds(self.train_dataset.num_users, self.train_dataset.num_items)
             # не очень аккуратно 
             self.train_dataset.embeds = all_embeds
             self.val_dataset.embeds = all_embeds
             self.test_dataset.embeds = all_embeds
 
-    def build_embeds(self, dataset):
-        assert self.embed_size is not None
-    
-        num_u = dataset.num_users
-        num_v = dataset.num_items
+    def build_embeds(self, num_u, num_v):
 
-        embeds = torch.empty((num_u + num_v, self.embed_size))
+        embeds = torch.zeros((num_u + num_v, self.embed_size))
 
         # process users
         cols_users = ['idx', 'sex', 'age_group' ,'occupation', 'zipcode']

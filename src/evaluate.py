@@ -37,7 +37,7 @@ if __name__ == "__main__":
         ml_data_module = pickle.load(handle)
     ml_1m_train = ml_data_module.train_dataset
     ml_1m_test = ml_data_module.test_dataset
-    CHECKPOINT_PATH = "lightning_logs/version_4/checkpoints/epoch=20-step=126.ckpt"
+    CHECKPOINT_PATH = "lightning_logs/version_0/checkpoints/epoch=4-step=3270.ckpt"
 #    CHECKPOINT_PATH = "gcn.ckpt"
     # model = GCN.load_from_checkpoint(CHECKPOINT_PATH, dataset=ml_1m_train, latent_dim=64)
     model = ESheafGCN_wo_embed.load_from_checkpoint(CHECKPOINT_PATH, latent_dim=40, dataset=ml_1m_train, learn_embeds=False)
@@ -60,5 +60,5 @@ if __name__ == "__main__":
     res["ndcg_20"] = res.apply(lambda x: ndcg_at_k(x["ranks_20"], k), axis=1)
 
     print(res["recall"].mean(), res["precision"].mean(), res["ndcg_20"].mean())
-    print(res)
-    print(res["reco"])
+    # print(res)
+    # print(res["reco"])
