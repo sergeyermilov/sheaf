@@ -45,11 +45,9 @@ class GCN(pl.LightningModule):
         nn.init.normal_(self.embedding.weight, std=0.1)
 
     def forward(self, edge_index):
-       emb0 = self.embedding.weight
+       emb0 = self.embedding.weight.to(device)
        emb1 = self.conv1(emb0, edge_index)
        emb2 = self.conv2(emb1, edge_index)
-       emb3 = self.conv3(emb2, edge_index)
-       emb3 = self.conv3(emb2, edge_index)
        emb3 = self.conv3(emb2, edge_index)
 
        embs = [emb0, emb1, emb2, emb3]
