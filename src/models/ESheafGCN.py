@@ -108,20 +108,20 @@ class ESheafGCN(pl.LightningModule):
 
 
 
-class ESheafGCN_wo_embed(pl.LightningModule):
+class ESheafGCN_content_features(pl.LightningModule):
     def __init__(self,
                  latent_dim,
-                 dataset, learn_embeds=True):
-        super(ESheafGCN_wo_embed, self).__init__()
+                 dataset):
+        super(ESheafGCN_content_features, self).__init__()
         self.dataset = dataset
-        self.learn_embeds = learn_embeds
-        if self.learn_embeds:
-            self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
+
+        self.user_embedding = [nn.Embedding(num_unique, latent_dim) for num_unique in self.dataset.embed_layers_config['users']]
+        self.item_embedding = [nn.Embedding(num_unique, latent_dim) for num_unique in self.dataset.embed_layers_config['items']]
+
         self.num_nodes = dataset.num_items + dataset.num_users
-        # self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
-        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim // 2, 40)
-        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim // 2, 40)
-        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim // 2, 40)
+        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
+        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
+        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim * 2, 40)
         self.adj = self.dataset.adjacency_matrix
         degree = self.adj.sum(dim=1)
         degree_inv_sqrt = torch.pow(degree, -0.5)
@@ -136,19 +136,20 @@ class ESheafGCN_wo_embed(pl.LightningModule):
             nn.init.xavier_uniform(layer.weight)
 
     def init_parameters(self):
-        if self.learn_embeds:
-            nn.init.normal_(self.embedding.weight, std=0.1)
+        for i in range(len(self.user_embedding)):
+            nn.init.normal_(self.user_embedding[i].weight, std=0.1)
+
+        for i in range(len(self.item_embedding)):
+            nn.init.normal_(self.item_embedding[i].weight, std=0.1)
+
         self.sheaf_conv1.fc_smat.apply(self.init_weights)
         self.sheaf_conv2.fc_smat.apply(self.init_weights)
         self.sheaf_conv3.fc_smat.apply(self.init_weights)
 
-    def forward(self, adj_matrix):
-        if self.learn_embeds:
-           emb0 = self.embedding.weight
-        else:
-           emb0 = self.dataset.embeds
+    def forward(self, adj_matrix, emb0):
+ 
         xmap, y = self.sheaf_conv1(adj_matrix, emb0)
-        return emb0, xmap, y
+        return xmap, y
 
     def training_step(self, batch, batch_idx):
         users, pos_items, neg_items = batch
@@ -170,7 +171,9 @@ class ESheafGCN_wo_embed(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=0.001)
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
-        emb0, xmap, y = self.forward(edge_index)
+        emb0 = self.eval_emb()
+
+        xmap, y = self.forward(edge_index, emb0)
         return (
            emb0,
            xmap,
@@ -179,3 +182,14 @@ class ESheafGCN_wo_embed(pl.LightningModule):
            y[pos_items],
            y[neg_items]
         )
+    
+    def eval_emb(self):
+        users_raw = self.dataset.raw_embeds['users']
+        users_emb = torch.stack([self.user_embedding[i](cur_feat_idxs) for i, cur_feat_idxs in enumerate(users_raw.T.split(1))]).mean(dim=0)
+
+        items_raw = self.dataset.raw_embeds['items']
+        genres_feat = items_raw[:, 1:]
+        genres_embeds = torch.stack([self.item_embedding[1](torch.where(row == 1)[0]).mean(dim=0) for row in genres_feat])
+        items_emb = torch.stack([self.item_embedding[0](items_raw[:, 1]), genres_embeds]).mean(dim=0)
+
+        return torch.vstack([users_emb[0], items_emb])

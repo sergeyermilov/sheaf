@@ -69,10 +69,9 @@ class MovieLensDataset(Dataset):
                 return neg_id
 
 class MovieLensDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='::', batch_size=32, learn_embeds=True, embed_size=None):
+    def __init__(self, ratings_file, sep='::', batch_size=32, content_feature=False):
         super().__init__()
-        self.learn_embeds = learn_embeds
-        self.embed_size = embed_size
+        self.content_feature = content_feature
         self.batch_size = batch_size
 
         COLUMNS_NAME = ['user_id', 'item_id', 'rating', "timestamp"]
@@ -116,57 +115,54 @@ class MovieLensDataModule(LightningDataModule):
         self.train_dataset = MovieLensDataset(self.train_df)
         self.val_dataset = MovieLensDataset(self.val_df)
         self.test_dataset = MovieLensDataset(self.test_df)
-        if not self.learn_embeds:
-            all_embeds = self.build_embeds(self.train_dataset.num_users, self.train_dataset.num_items)
-            # не очень аккуратно 
-            self.train_dataset.embeds = all_embeds
-            self.val_dataset.embeds = all_embeds
-            self.test_dataset.embeds = all_embeds
+        if self.content_feature:
+            raw_embeds, embed_layers_config = self.build_embeds(self.train_dataset.num_users, self.train_dataset.num_items)
+            self.train_dataset.raw_embeds = raw_embeds
+            self.train_dataset.embed_layers_config = embed_layers_config
+
 
     def build_embeds(self, num_u, num_v):
 
-        embeds = torch.zeros((num_u + num_v, self.embed_size))
-
         # process users
+        embeds_users = torch.zeros((num_u, 3)).long()
         cols_users = ['idx', 'sex', 'age_group' ,'occupation', 'zipcode']
         data_users = pd.read_csv('data/ml-1m/users.dat', sep='::', names=cols_users, engine='python')
-
-        user_vectors = pd.concat([pd.get_dummies(data_users.sex),
-           pd.get_dummies(data_users.age_group), pd.get_dummies(data_users.occupation)], axis=1).values.astype(int)
         
-        user_embed_layer = nn.Linear(user_vectors.shape[1], self.embed_size, bias=False)
-        nn.init.normal_(user_embed_layer.weight, std=0.1)
-        user_embed_layer.weight.requires_grad = False
+        num_unique_users = []
+        for col in ['sex', 'age_group', 'occupation']:
+            encoder = pp.LabelEncoder()
+            data_users[col] = encoder.fit_transform(data_users[col])
+            num_unique_users.append(encoder.classes_.shape[0])
 
-        user_embeds = user_embed_layer(torch.Tensor(user_vectors))
-
-        embeds[np.arange(num_u)] = user_embeds[self.label_encoder_user.inverse_transform(np.arange(num_u)) - 1]
+        user_vectors = torch.LongTensor(data_users[['sex', 'age_group', 'occupation']].values)
+        embeds_users[np.arange(num_u)] = user_vectors[self.label_encoder_user.inverse_transform(np.arange(num_u)) - 1]
 
         # process items
-        cols_items = ['idx', 'name', 'genres']
-        data_items = pd.read_csv('data/ml-1m/movies.dat', sep='::', names=cols_items, engine='python')
-
-        idx_encoder = pp.LabelEncoder().fit(data_items.idx)
-
         genres = ['Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime', 'Documentary', 'Drama',
 	              'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
-        genre_encoder = pp.LabelEncoder().fit(genres)
 
+        embeds_items = torch.zeros((num_v, 1 + len(genres))).long()
+
+        cols_items = ['idx', 'name', 'genres']
+        data_items = pd.read_csv('data/ml-1m/movies.dat', sep='::', names=cols_items, engine='python')
+        idx_encoder = pp.LabelEncoder().fit(data_items.idx)
+
+        years_encoder = pp.LabelEncoder()
         years = data_items.name.apply(lambda x: int(x[x.rfind('(')+1:-1]))
-        years_embed = pd.get_dummies(years.apply(lambda x: (x//10 * 10) + 5 * (x%10 // 5))).values.astype(int)
+        years = years_encoder.fit_transform(years.apply(lambda x: (x//10 * 10) + 5 * (x%10 // 5)))
+
+        genre_encoder = pp.LabelEncoder().fit(genres)
 
         genres_embed = np.stack(data_items.genres.apply(lambda x: np.where(np.isin(
             np.arange(len(genres)), genre_encoder.transform(x.split('|'))
             ), 1, 0)).values)
         
-        item_embed_layer = nn.Linear(years_embed.shape[1] + genres_embed.shape[1], self.embed_size, bias=False)
-        nn.init.normal_(item_embed_layer.weight, std=0.1)
-        item_embed_layer.weight.requires_grad = False
+        item_embeds = torch.hstack([torch.LongTensor(years).view(-1, 1), torch.LongTensor(genres_embed)])
+        embeds_items[np.arange(num_v)] = item_embeds[idx_encoder.transform(self.label_encoder_item.inverse_transform(np.arange(num_v)))]
 
-        item_embeds = item_embed_layer(torch.hstack([torch.Tensor(years_embed), torch.Tensor(genres_embed)]))
-        embeds[np.arange(num_v) + num_u] = item_embeds[idx_encoder.transform(self.label_encoder_item.inverse_transform(np.arange(num_v)))]
+        num_unique_items = [years_encoder.classes_.shape[0], len(genres)]
 
-        return embeds
+        return {'users': embeds_users, 'items': embeds_items}, {'users': num_unique_users, 'items': num_unique_items}
         
 
 
