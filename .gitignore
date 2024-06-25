@@ -3,6 +3,7 @@
 *.ckpt
 *lightning_logs/
 test.ipynb
+metrics.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

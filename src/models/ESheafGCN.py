@@ -168,7 +168,21 @@ class ESheafGCN_content_features(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+        all_params = []
+
+        for embedder in self.user_embedding:
+            for p in embedder.parameters():
+                all_params.append(p)
+
+        for embedder in self.item_embedding:
+            for p in embedder.parameters():
+                all_params.append(p)
+
+        all_params += list(self.parameters())
+
+        print(all_params)
+
+        return torch.optim.Adam(all_params, lr=0.001)
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         emb0 = self.eval_emb()
