@@ -23,8 +23,8 @@ class FacebookDataset(Dataset):
         self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(
             list).reset_index()
 
-        u_t = torch.LongTensor(self.pandas_data.user_id_idx.values)
-        i_t = torch.LongTensor(self.pandas_data.item_id_idx.values) + self.num_users
+        u_t = torch.tensor(self.pandas_data.user_id_idx.values, dtype=torch.long)
+        i_t = torch.tensor(self.pandas_data.item_id_idx.values, dtype=torch.long) + self.num_users
 
         self.train_edge_index = torch.stack((
             torch.cat([u_t, i_t]),
