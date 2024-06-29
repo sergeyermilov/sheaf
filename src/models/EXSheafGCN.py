@@ -2,7 +2,7 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
+from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_bpr_loss_with_reg
 
 
 class Sheaf_Conv_fixed(nn.Module):
@@ -40,7 +40,7 @@ class Sheaf_Conv_fixed(nn.Module):
         comb_vu = torch.concat([e_v, e_u], axis=-1)  # v, u -> A(v, u)
 
         smat_uv = torch.reshape(self.fc_smat(comb_uv), (-1, self.dimy, self.dimx))  # A(u, v)
-        smat_uv_t = torch.reshape(self.fc_smat(comb_uv), (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
+        smat_uv_t = torch.reshape(smat_uv, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
         smat_vu = torch.reshape(self.fc_smat(comb_vu), (-1, self.dimy, self.dimx))  # A(v, u)
 
         # compute h_v = A(u,v)^T A(v,u) * x(v)
