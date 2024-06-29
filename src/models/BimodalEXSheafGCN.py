@@ -4,17 +4,32 @@ from torch import nn
 
 from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_bpr_loss_with_reg
 
-"This approach works only for bipartite graphs with two entities!"
-
 
 class Sheaf_Conv_fixed(nn.Module):
-    def __init__(self, dimx, dimy):
+    def __init__(self, dimx, dimy, nsmat=64):
         super(Sheaf_Conv_fixed, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
 
-        self.user_operator = nn.Linear(self.dimx, self.dimy, bias=False)
-        self.item_operator = nn.Linear(self.dimx, self.dimy, bias=False)
+        self.orth_eye = torch.eye(self.dimy).unsqueeze(0)
+
+        self.user_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
+        self.item_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
+        self.fc_smat = nn.Sequential(nn.Linear(self.dimx * 2, nsmat),
+                                     nn.ReLU(),
+                                     nn.Linear(nsmat, nsmat),
+                                     nn.ReLU(),
+                                     nn.Linear(nsmat, nsmat),
+                                     nn.ReLU(),
+                                     nn.Linear(nsmat, nsmat),
+                                     nn.ReLU(),
+                                     nn.Linear(nsmat, nsmat),
+                                     nn.ReLU(),
+                                     nn.Linear(nsmat, nsmat),
+                                     nn.ReLU(),
+                                     nn.Linear(nsmat, nsmat),
+                                     nn.ReLU(),
+                                     nn.Linear(nsmat, self.dimy * self.dimx))
 
     def forward(self, adj_matrix, embeddings, edge_index, compute_losses: bool = False):
         # first half is users
@@ -24,22 +39,28 @@ class Sheaf_Conv_fixed(nn.Module):
         u = edge_index[0, :]
         v = edge_index[1, :]
 
+        e_u = embeddings[u, :]
         e_v = embeddings[v, :]
 
-        e_v_item = e_v[:entity_separation, :]
-        e_v_user = e_v[entity_separation:, :]
+        comb_uv = torch.concat([e_u, e_v], axis=-1)  # u, v -> A(u, v)
+        comb_vu = torch.concat([e_v, e_u], axis=-1)  # v, u -> A(v, u)
 
-        h_v_user = self.user_operator(e_v_user)
-        h_v_item = self.item_operator(e_v_item)
+        smat_uv = torch.reshape(self.fc_smat(comb_uv), (-1, self.dimy, self.dimx))  # A(u, v)
+        smat_uv[:entity_separation, ...] += self.user_operator
+        smat_uv[entity_separation:, ...] += self.item_operator
+        smat_uv_t = torch.reshape(smat_uv, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
 
-        h_user = torch.matmul(self.item_operator.weight.T, h_v_user.T)
-        h_item = torch.matmul(self.user_operator.weight.T, h_v_item.T)
+        smat_vu = torch.reshape(self.fc_smat(comb_vu), (-1, self.dimy, self.dimx))  # A(v, u)
+        smat_vu[entity_separation:, ...] += self.user_operator
+        smat_vu[:entity_separation, ...] += self.item_operator
 
-        e_embedds = torch.concat([h_user.T, h_item.T], axis=0)
+        # compute h_v = A(u,v)^T A(v,u) * x(v)
+        h_v_ = torch.bmm(smat_vu, e_v.unsqueeze(-1)).squeeze(-1)
+        h_v = torch.bmm(smat_uv_t, h_v_.unsqueeze(-1)).squeeze(-1)
 
         # compute c_v = w*(v,u) * h_v
         embedding_weights = adj_matrix[edge_index[0, :], edge_index[1, :]]
-        c_v = embedding_weights.view(-1, 1) * e_embedds
+        c_v = embedding_weights.view(-1, 1) * h_v
 
         # compute  sum_v
         m_u = torch.zeros_like(embeddings)
@@ -55,54 +76,43 @@ class Sheaf_Conv_fixed(nn.Module):
         diff_w = torch.bmm(diff_x.swapaxes(-1, -2), diff_x)
         diff_loss = diff_w.mean()
 
-        # # compute intermediate values for loss cons
-        p_item = torch.matmul(self.item_operator.weight.T, self.item_operator.weight)
-        p_user = torch.matmul(self.user_operator.weight.T, self.user_operator.weight)
-
-        cons_y_item = self.item_operator.weight - torch.matmul(self.item_operator.weight, p_item)
-        cons_y_user = self.user_operator.weight - torch.matmul(self.user_operator.weight, p_user)
-
-        cons_q_item = torch.matmul(cons_y_item.T, cons_y_item)
-        cons_q_user = torch.matmul(cons_y_user.T, cons_y_user)
-
-        cons_user_idx = torch.unique(u[:entity_separation])
-        cons_item_idx = torch.unique(u[entity_separation:])
-
-        cons_emb_user = embeddings[cons_user_idx, :]
-        cons_emb_item = embeddings[cons_item_idx, :]
-
-        cons_w1_user = torch.matmul(cons_emb_user, cons_q_user)
-        cons_w2_user = (cons_w1_user + cons_w1_user).sum(axis=-1)
-
-        cons_w1_item = torch.matmul(cons_emb_item, cons_q_item)
-        cons_w2_item = (cons_w1_item + cons_w1_item).sum(axis=-1)
-
-        cons_loss = torch.mean(torch.concat([cons_w2_user, cons_w2_item]))
+        # compute intermediate values for loss cons
+        # P(u, v) = A(u, v)^T A(u, v)
+        cons_p = torch.bmm(smat_uv_t, smat_uv)
+        # A(u, v) - A(u, v) P(u, v)
+        cons_y = smat_uv - torch.bmm(smat_uv, cons_p)
+        # Q(u, v) = (A(u, v) - A(u, v) P(u, v))^T (A(u, v) - A(u, v) P(u, v))
+        cons_q = torch.bmm(cons_y.swapaxes(-1, -2), cons_y)
+        # W(u, v) = x(u)^T Q(u, v) x(u)
+        cons_w1 = torch.bmm(cons_q, e_u.unsqueeze(-1))
+        cons_w2 = torch.bmm(e_u.unsqueeze(-1).swapaxes(-1, -2), cons_w1)
+        cons_loss = cons_w2.mean()
 
         # compute intermediate values for loss orth
-        a = torch.matmul(self.item_operator.weight, self.item_operator.weight.T) - torch.eye(
-            self.item_operator.weight.shape[0])
-        b = torch.matmul(self.user_operator.weight, self.user_operator.weight.T) - torch.eye(
-            self.user_operator.weight.shape[0])
+        orth_aat = torch.bmm(smat_uv, smat_uv_t)
+        orth_q = orth_aat - self.orth_eye
+        orth_z = torch.bmm(orth_q.swapaxes(-1, -2), orth_q)
 
-        orth_loss = (torch.trace(torch.matmul(a.T, a)) + torch.trace(torch.matmul(b.T, b))) / 2
+        # compute trace
+        orth = torch.einsum("ijj", orth_z)
+        orth_loss = torch.mean(orth)
 
         return m_u, diff_loss, cons_loss, orth_loss
 
 
-class ModalSheafGCN(pl.LightningModule):
+class BimodalEXSheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset):
-        super(ModalSheafGCN, self).__init__()
+        super(BimodalEXSheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
 
-        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim)
-        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim)
-        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim)
+        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim, 40)
+        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim, 40)
+        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim, 40)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = self.dataset.adjacency_matrix
@@ -117,19 +127,19 @@ class ModalSheafGCN(pl.LightningModule):
 
     def init_weights(self, layer):
         if type(layer) == nn.Linear:
-            nn.init.xavier_uniform(layer.weight)
+            nn.init.xavier_uniform_(layer.weight)
 
     def init_parameters(self):
         nn.init.normal_(self.embedding.weight, std=0.1)
-
-        self.sheaf_conv1.user_operator.apply(self.init_weights)
-        self.sheaf_conv1.item_operator.apply(self.init_weights)
-
-        self.sheaf_conv2.user_operator.apply(self.init_weights)
-        self.sheaf_conv2.item_operator.apply(self.init_weights)
-
-        self.sheaf_conv3.user_operator.apply(self.init_weights)
-        self.sheaf_conv3.item_operator.apply(self.init_weights)
+        self.sheaf_conv1.fc_smat.apply(self.init_weights)
+        self.sheaf_conv2.fc_smat.apply(self.init_weights)
+        self.sheaf_conv3.fc_smat.apply(self.init_weights)
+        nn.init.xavier_uniform_(self.sheaf_conv1.user_operator.data)
+        nn.init.xavier_uniform_(self.sheaf_conv1.item_operator.data)
+        nn.init.xavier_uniform_(self.sheaf_conv2.user_operator.data)
+        nn.init.xavier_uniform_(self.sheaf_conv2.item_operator.data)
+        nn.init.xavier_uniform_(self.sheaf_conv3.user_operator.data)
+        nn.init.xavier_uniform_(self.sheaf_conv3.item_operator.data)
 
     def forward(self, adj_matrix):
         emb0 = self.embedding.weight

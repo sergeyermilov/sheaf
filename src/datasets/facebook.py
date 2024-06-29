@@ -10,7 +10,9 @@ from torch_geometric.utils import to_dense_adj
 
 
 class FacebookDataset(Dataset):
-    def __init__(self, df):
+    def __init__(self, df, random_state=42):
+        random.seed(random_state)
+
         # Unique user and items ids as numpy array
         self.pandas_data = df
         self.user_ids = self.pandas_data.user_id.unique()
@@ -51,7 +53,7 @@ class FacebookDataset(Dataset):
                 return neg_id
 
 class FacebookDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='\t', batch_size=32):
+    def __init__(self, ratings_file, sep='\t', batch_size=32, random_state=42):
         super().__init__()
         self.batch_size = batch_size
 
@@ -59,8 +61,8 @@ class FacebookDataModule(LightningDataModule):
         self.pandas_data = pd.read_csv(ratings_file, sep=sep, names=COLUMNS_NAME, engine='python')
 
         # Train/val/test splitting
-        train, test = train_test_split(self.pandas_data, test_size=0.2)
-        val, test = train_test_split(test, test_size=0.5)
+        train, test = train_test_split(self.pandas_data, test_size=0.2, random_state=random_state)
+        val, test = train_test_split(test, test_size=0.5, random_state=random_state)
         self.train_df = pd.DataFrame(train, columns=self.pandas_data.columns)
         self.val_df = pd.DataFrame(val, columns=self.pandas_data.columns)
         self.test_df = pd.DataFrame(test, columns=self.pandas_data.columns)
@@ -92,9 +94,9 @@ class FacebookDataModule(LightningDataModule):
 
     def setup(self):
         # Assign train/val datasets for use in dataloaders
-        self.train_dataset = FacebookDataset(self.train_df)
-        self.val_dataset = FacebookDataset(self.val_df)
-        self.test_dataset = FacebookDataset(self.test_df)
+        self.train_dataset = FacebookDataset(self.train_df, 42)
+        self.val_dataset = FacebookDataset(self.val_df, 42)
+        self.test_dataset = FacebookDataset(self.test_df, 42)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size)
