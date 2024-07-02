@@ -43,7 +43,7 @@ def serialize_dataset(filename, datamodule):
 @click.option("--epochs", default=20, type=int)
 def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs):
     model_class = MODELS[model]
-    dataset_class, dataset_path = MODELS[dataset]
+    dataset_class, dataset_path = DATASETS[dataset]
 
     dataset_path = str(pathlib.Path(dataset_dir).joinpath(dataset_path))
     ml_data_module = dataset_class(dataset_path, batchsize=batch_size)
