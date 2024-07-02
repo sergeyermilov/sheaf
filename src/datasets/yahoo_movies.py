@@ -8,6 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
 from torch_geometric.utils import to_dense_adj
 
+YAHOO_DATASET_RELATIVE_PATH = "yahoo/ydata-ymovies-user-movie-ratings-train-v1_0.txt"
+
 
 class YahooMoviesDataset(Dataset):
     def __init__(self, df, random_state=42):
