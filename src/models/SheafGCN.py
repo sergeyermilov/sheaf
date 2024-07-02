@@ -52,12 +52,9 @@ class SheafConvLayer(nn.Module):
         right_maps = torch.index_select(maps, index=self.right_idx, dim=0)
         non_diag_maps = -left_maps * right_maps
 
-        # m_u = torch.zeros_like(embeddings)
-        # indx = u.view(-1, 1).repeat(1, embeddings.shape[1])
-        # m_u = torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
-        diag_maps = torch.zeros_like(maps)
-        torch.scatter_add(input=diag_maps, src=maps**2, index=row, dim=0, reduce="sum", include_self=False)
-        #diag_maps = scatter_add(maps ** 2, row, dim=0, dim_size=self.num_nodes)
+        unique_vals = torch.unique(row.unsqueeze(1))
+        diag_maps = torch.zeros((unique_vals.shape[0], 1), dtype=torch.float32)
+        diag_maps = torch.scatter_reduce(input=diag_maps, dim=0, index=row.unsqueeze(1), src=maps ** 2, reduce="sum")
 
         d_sqrt_inv = (diag_maps + 1).pow(-0.5)
         left_norm, right_norm = d_sqrt_inv[row], d_sqrt_inv[col]
@@ -119,11 +116,8 @@ class SheafGCN(pl.LightningModule):
                                                                                           pos_items,
                                                                                           neg_items,
                                                                                           train_edge_index)
-        bpr_loss, reg_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0)
-        final_loss = bpr_loss + reg_loss
-        self.log('final_loss', final_loss)
+        bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
         self.log('bpr_loss', bpr_loss)
-        self.log('reg_loss', reg_loss)
         return bpr_loss
 
     def configure_optimizers(self):
