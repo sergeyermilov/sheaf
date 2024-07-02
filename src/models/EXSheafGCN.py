@@ -2,8 +2,13 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_bpr_loss_with_reg
+from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 
+"""
+This is extension over initial approach implemented in ESheafGCN. Instead of using feed forward network 
+over single node features, we use FFN over adjacent node features (two concatenated embeddings). The FFN computes linear
+operator that transforms node to common space.
+"""
 
 class Sheaf_Conv_fixed(nn.Module):
     def __init__(self, dimx, dimy, nsmat=64):
