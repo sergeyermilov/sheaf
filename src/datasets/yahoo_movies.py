@@ -10,7 +10,9 @@ from torch_geometric.utils import to_dense_adj
 
 
 class YahooMoviesDataset(Dataset):
-    def __init__(self, df):
+    def __init__(self, df, random_state=42):
+        random.seed(random_state)
+
         # Unique user and items ids as numpy array
         self.pandas_data = df
         self.user_ids = self.pandas_data.user_id.unique()
@@ -23,8 +25,8 @@ class YahooMoviesDataset(Dataset):
         self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(
             list).reset_index()
 
-        u_t = torch.LongTensor(self.pandas_data.user_id_idx.values)
-        i_t = torch.LongTensor(self.pandas_data.item_id_idx.values) + self.num_users
+        u_t = torch.tensor(self.pandas_data.user_id_idx.values, dtype=torch.long)
+        i_t = torch.tensor(self.pandas_data.item_id_idx.values, dtype=torch.long) + self.num_users
 
         self.train_edge_index = torch.stack((
             torch.cat([u_t, i_t]),
@@ -51,7 +53,7 @@ class YahooMoviesDataset(Dataset):
                 return neg_id
 
 class YahooMoviesDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='\t', batch_size=32):
+    def __init__(self, ratings_file, sep='\t', batch_size=32, random_state=42):
         super().__init__()
         self.batch_size = batch_size
 
@@ -60,8 +62,8 @@ class YahooMoviesDataModule(LightningDataModule):
         self.pandas_data = self.pandas_data[self.pandas_data['rating'] >= 3]
 
         # Train/val/test splitting
-        train, test = train_test_split(self.pandas_data, test_size=0.2)
-        val, test = train_test_split(test, test_size=0.5)
+        train, test = train_test_split(self.pandas_data, test_size=0.2, random_state=random_state)
+        val, test = train_test_split(test, test_size=0.5, random_state=random_state)
         self.train_df = pd.DataFrame(train, columns=self.pandas_data.columns)
         self.val_df = pd.DataFrame(val, columns=self.pandas_data.columns)
         self.test_df = pd.DataFrame(test, columns=self.pandas_data.columns)
