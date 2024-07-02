@@ -72,7 +72,8 @@ def get_metrics(_df, k, user_embeddings, item_embeddings):
 @click.option("--epochs", default=5, type=int)
 @click.option("--artifact_dir", default="artifact/", type=str)
 @click.option("--report_dir", default="report/", type=str)
-def main(model, dataset, epochs, artifact_dir, report_dir):
+@click.option("--device", default="cuda", type=str)
+def main(model, dataset, epochs, artifact_dir, report_dir, device):
     print("-----------------------------------------------")
     print("Running model with the following configuration:")
     print(f"model = {model}")
@@ -83,6 +84,8 @@ def main(model, dataset, epochs, artifact_dir, report_dir):
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
         raise Exception("You need to fix CUDA_VISIBLE_DEVICE to desired device. Distributed training is not yet supported.")
+
+    torch.set_default_device(device)
 
     artifact_dir = pathlib.Path(artifact_dir)
     report_dir = pathlib.Path(report_dir)
