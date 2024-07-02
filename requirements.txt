@@ -1,0 +1,7 @@
+pandas==2.2.2
+pytorch-lightning==2.3.0
+torch==2.0.1+cu117
+torch_geometric==2.5.3
+tqdm==4.66.4
+click==8.1.7
+scikit-learn==1.5.0
