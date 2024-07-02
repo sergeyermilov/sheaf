@@ -42,11 +42,21 @@ def serialize_dataset(filename, datamodule):
 @click.option("--batch_size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs):
+    print("-----------------------------------------------")
+    print("Running model with the following configuration:")
+    print(f"model = {model}")
+    print(f"dataset = {dataset}")
+    print(f"latent_dim = {latent_dim}")
+    print(f"dataset_dir = {dataset_dir}")
+    print(f"batch_size = {batch_size}")
+    print(f"epochs = {epochs}")
+    print("-----------------------------------------------")
+
     model_class = MODELS[model]
     dataset_class, dataset_path = DATASETS[dataset]
 
     dataset_path = str(pathlib.Path(dataset_dir).joinpath(dataset_path))
-    ml_data_module = dataset_class(dataset_path, batchsize=batch_size)
+    ml_data_module = dataset_class(dataset_path, batch_size=batch_size)
     ml_data_module.setup()
     serialize_dataset(f"DATA_{model}_{dataset}.pickle", ml_data_module)
 
