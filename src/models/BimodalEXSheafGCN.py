@@ -2,8 +2,12 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_bpr_loss_with_reg
+from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 
+"""
+This is extension over an approach implemented in EXSheafGCN. Here we use FFN over two embeddings and two global matrices
+to compute linear operator. A = FFN(u, v) + Q_user if u is user node, and A = FFN(u, v) + Q_item if u is item node.  
+"""
 
 class Sheaf_Conv_fixed(nn.Module):
     def __init__(self, dimx, dimy, nsmat=64):

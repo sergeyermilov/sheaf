@@ -2,9 +2,13 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_bpr_loss_with_reg
+from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 
-"This approach works only for bipartite graphs with two entities!"
+"""
+This approach works only for bipartite graphs with two entities!
+Here we compute two global matrices serving as linear operator for two entities users and items.
+Our hypothesis is that item embeddings and user embeddings can be translated to common linear space using this operator.
+"""
 
 
 class Sheaf_Conv_fixed(nn.Module):
@@ -90,11 +94,11 @@ class Sheaf_Conv_fixed(nn.Module):
         return m_u, diff_loss, cons_loss, orth_loss
 
 
-class ModalSheafGCN(pl.LightningModule):
+class BimodalSheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset):
-        super(ModalSheafGCN, self).__init__()
+        super(BimodalSheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
