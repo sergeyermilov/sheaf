@@ -8,6 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
 from torch_geometric.utils import to_dense_adj
 
+FACEBOOK_DATASET_RELATIVE_PATH = "facebook/Facebook dataset.tsv"
+
 
 class FacebookDataset(Dataset):
     def __init__(self, df, random_state=42):
