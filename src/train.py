@@ -25,7 +25,7 @@ MODELS = {
     "BimodalEXSheafGCN": BimodalEXSheafGCN,
     "LightGCN": LightGCN,
     "GAT": GAT,
-    "SheafGCN": SheafGCN
+    "SheafGCN": SheafGCN,
 }
 
 DATASETS = {
