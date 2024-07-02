@@ -10,7 +10,9 @@ from torch_geometric.utils import to_dense_adj
 
 
 class MovieLensDataset(Dataset):
-    def __init__(self, df):
+    def __init__(self, df, random_state=42):
+        random.seed(random_state)
+
         # Unique user and items ids as numpy array
         self.pandas_data = df
         self.user_ids = self.pandas_data.user_id.unique()
@@ -51,7 +53,7 @@ class MovieLensDataset(Dataset):
                 return neg_id
 
 class MovieLensDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='::', batch_size=32):
+    def __init__(self, ratings_file, sep='::', batch_size=32, random_state=42):
         super().__init__()
         self.batch_size = batch_size
 
@@ -60,8 +62,8 @@ class MovieLensDataModule(LightningDataModule):
         self.pandas_data = self.pandas_data[self.pandas_data['rating'] >= 3]
 
         # Train/val/test splitting
-        train, test = train_test_split(self.pandas_data, test_size=0.2)
-        val, test = train_test_split(test, test_size=0.5)
+        train, test = train_test_split(self.pandas_data, test_size=0.2, random_state=random_state)
+        val, test = train_test_split(test, test_size=0.5, random_state=random_state)
         self.train_df = pd.DataFrame(train, columns=self.pandas_data.columns)
         self.val_df = pd.DataFrame(val, columns=self.pandas_data.columns)
         self.test_df = pd.DataFrame(test, columns=self.pandas_data.columns)
