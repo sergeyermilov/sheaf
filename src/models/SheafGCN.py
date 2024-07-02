@@ -1,7 +1,6 @@
 import torch
 import pytorch_lightning as pl
 from torch import nn
-from torch_scatter import scatter_add
 
 from src.losses.bpr import compute_bpr_loss
 
@@ -52,7 +51,13 @@ class SheafConvLayer(nn.Module):
         left_maps = torch.index_select(maps, index=self.left_idx, dim=0)
         right_maps = torch.index_select(maps, index=self.right_idx, dim=0)
         non_diag_maps = -left_maps * right_maps
-        diag_maps = scatter_add(maps ** 2, row, dim=0, dim_size=self.num_nodes)
+
+        # m_u = torch.zeros_like(embeddings)
+        # indx = u.view(-1, 1).repeat(1, embeddings.shape[1])
+        # m_u = torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
+        diag_maps = torch.zeros_like(maps)
+        torch.scatter_add(input=diag_maps, src=maps**2, index=row, dim=0, reduce="sum", include_self=False)
+        #diag_maps = scatter_add(maps ** 2, row, dim=0, dim_size=self.num_nodes)
 
         d_sqrt_inv = (diag_maps + 1).pow(-0.5)
         left_norm, right_norm = d_sqrt_inv[row], d_sqrt_inv[col]

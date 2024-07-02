@@ -16,6 +16,7 @@ from src.models.BimodalSheafGCN import BimodalSheafGCN
 from src.models.BimodalEXSheafGCN import BimodalEXSheafGCN
 from src.models.LightGCN import LightGCN
 from src.models.GAT import GAT
+from src.models.SheafGCN import SheafGCN
 
 MODELS = {
     "EXSheafGCN": EXSheafGCN,
@@ -23,7 +24,8 @@ MODELS = {
     "BimodalSheafGCN": BimodalSheafGCN,
     "BimodalEXSheafGCN": BimodalEXSheafGCN,
     "LightGCN": LightGCN,
-    "GAT": GAT
+    "GAT": GAT,
+    "SheafGCN": SheafGCN
 }
 
 DATASETS = {
