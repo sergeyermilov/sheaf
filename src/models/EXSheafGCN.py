@@ -94,7 +94,7 @@ class EXSheafGCNLayer(nn.Module):
         return m_u, diff_loss, cons_loss, orth_loss
 
     def init_parameters(self):
-        nn.init.xavier_uniform(self.sheaf_conv1.fc_smat.weight)
+        nn.init.xavier_uniform(self.fc_smat.weight)
 
 
 class EXSheafGCN(pl.LightningModule):
