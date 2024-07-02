@@ -1,3 +1,4 @@
+import os
 import torch
 import click
 import json
@@ -66,6 +67,9 @@ def get_metrics(_df, k, user_embeddings, item_embeddings):
 @click.option("--model", default="LightGCN", type=str)
 @click.option("--dataset", default="LightGCN", type=str)
 def main(model, dataset):
+    if os.getenv("CUDA_VISIBLE_DEVICE"):
+        raise Exception("You need to fix CUDA_VISIBLE_DEVICE to desired device. Distributed training is not yet supported.")
+
     with open(f"DATA_{model}_{dataset}.pickle", 'rb') as handle:
         ml_data_module = pickle.load(handle)
 

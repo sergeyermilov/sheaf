@@ -1,3 +1,4 @@
+import os
 import click
 import torch
 import pickle
@@ -54,6 +55,9 @@ def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device):
     print(f"epochs = {epochs}")
     print(f"device = {device}")
     print("-----------------------------------------------")
+
+    if os.getenv("CUDA_VISIBLE_DEVICE"):
+        raise Exception("You need to fix CUDA_VISIBLE_DEVICE to desired device. Distributed training is not yet supported.")
 
     torch.set_default_device(device)
 
