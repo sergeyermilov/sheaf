@@ -73,7 +73,7 @@ class BimodalEXSheafGCNLayer(nn.Module):
         m_u = torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
 
         if not compute_losses:
-            return m_u, None, None, None
+            return m_u
 
         # compute intermediate values for loss diff
         diff_x = (m_u - embeddings).unsqueeze(-1)
