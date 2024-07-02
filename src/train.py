@@ -1,4 +1,5 @@
 import click
+import torch
 import pickle
 import pathlib
 
@@ -41,7 +42,8 @@ def serialize_dataset(filename, datamodule):
 @click.option("--dataset_dir", default="../data", type=str)
 @click.option("--batch_size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
-def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs):
+@click.option("--device", default="cuda", type=str)
+def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device):
     print("-----------------------------------------------")
     print("Running model with the following configuration:")
     print(f"model = {model}")
@@ -50,7 +52,10 @@ def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs):
     print(f"dataset_dir = {dataset_dir}")
     print(f"batch_size = {batch_size}")
     print(f"epochs = {epochs}")
+    print(f"device = {device}")
     print("-----------------------------------------------")
+
+    torch.set_default_device(device)
 
     model_class = MODELS[model]
     dataset_class, dataset_path = DATASETS[dataset]
