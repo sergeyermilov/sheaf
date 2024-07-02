@@ -1,13 +1,27 @@
-import numpy as np
 import torch
+import click
+import json
 import pickle
+
+import numpy as np
 import pandas as pd
-
 from tqdm import tqdm
-from math import log
 
+from src.models.EXSheafGCN import EXSheafGCN
 from src.models.ESheafGCN import ESheafGCN
+from src.models.BimodalSheafGCN import BimodalSheafGCN
+from src.models.BimodalEXSheafGCN import BimodalEXSheafGCN
+from src.models.LightGCN import LightGCN
 from src.models.GAT import GAT
+
+MODELS = {
+    "EXSheafGCN": EXSheafGCN,
+    "ESheafGCN": ESheafGCN,
+    "BimodalSheafGCN": BimodalSheafGCN,
+    "BimodalEXSheafGCN": BimodalEXSheafGCN,
+    "LightGCN": LightGCN,
+    "GAT": GAT
+}
 
 pd.set_option('display.max_columns', None)
 tqdm.pandas()
@@ -36,8 +50,8 @@ def ndcg_at_k(score, k=None):
     ndcg = actual_dcg / best_dcg
     return ndcg
 
-def get_metrics(_df, k):
-    _df[f"reco_{k}"] = _df.progress_apply(lambda x: evaluate(x["user_id_idx"], final_user_Embed, final_item_Embed, x["interacted_id_idx"], k), axis=1)
+def get_metrics(_df, k, user_embeddings, item_embeddings):
+    _df[f"reco_{k}"] = _df.progress_apply(lambda x: evaluate(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k), axis=1)
     _df[f"intersected_{k}"] = _df.apply(lambda x: list(set(x[f"reco_{k}"]).intersection(x["item_id_idx"])), axis=1)
 
     _df[f"recall_{k}"] = _df.apply(lambda x: len(x[f"intersected_{k}"]) / len(x["item_id_idx"]), axis=1)
@@ -48,26 +62,42 @@ def get_metrics(_df, k):
     return _df
 
 
-# Recommended movies ID
-
-if __name__ == "__main__":
-    with open('dataset.pickle', 'rb') as handle:
+@click.command()
+@click.option("--model", default="LightGCN", type=str)
+@click.option("--dataset", default="LightGCN", type=str)
+def main(model, dataset):
+    with open(f"DATA_{model}_{dataset}.pickle", 'rb') as handle:
         ml_data_module = pickle.load(handle)
+
     ml_1m_train = ml_data_module.train_dataset
     ml_1m_test = ml_data_module.test_dataset
-    CHECKPOINT_PATH = "gcn.ckpt"
-    model = ESheafGCN.load_from_checkpoint(CHECKPOINT_PATH, dataset=ml_1m_train, latent_dim=40)
+
+    model = MODELS[model].load_from_checkpoint(f"MODEL_{model}_{dataset}.pickle", dataset=ml_1m_train, latent_dim=40)
     model.eval()
+
     with torch.no_grad():
-        emb0, xmap, y, out, _, _, _ = model(ml_1m_train.adjacency_matrix)
-        final_user_Embed, final_item_Embed = torch.split(out, (ml_1m_train.num_users, ml_1m_train.num_items))
+        _, embeddings = model(ml_1m_train.adjacency_matrix)
+        user_embeddings, item_embeddings = torch.split(embeddings, (ml_1m_train.num_users, ml_1m_train.num_items))
 
     res = ml_1m_test.interacted_items_by_user_idx.copy(deep=True)
-    interactions = ml_1m_train.interacted_items_by_user_idx.copy(deep=True).rename(columns={"item_id_idx": "interacted_id_idx"})
+    interactions = ml_1m_train.interacted_items_by_user_idx.copy(deep=True).rename(
+        columns={"item_id_idx": "interacted_id_idx"})
     res = res.merge(interactions, on=["user_id_idx"])
 
-    res = get_metrics(res, 20)
-    res = get_metrics(res, 10)
+    res = get_metrics(res, 5, user_embeddings, item_embeddings)
+    res = get_metrics(res, 10, user_embeddings, item_embeddings)
+    res = get_metrics(res, 20, user_embeddings, item_embeddings)
+    res = get_metrics(res, 50, user_embeddings, item_embeddings)
 
-    print(res["recall_20"].mean(), res["precision_20"].mean(), res["ndcg_20"].fillna(0.0).mean())
-    print(res["recall_10"].mean(), res["precision_10"].mean(), res["ndcg_10"].fillna(0.0).mean())
+    res.to_csv(f"DETAILED_{model}_{dataset}.csv")
+
+    brief = dict()
+    for c in res.columns:
+        brief[c] = res[c].mean()
+
+    with open(f"BRIEF_{model}_{dataset}.json", "w") as brief_file:
+        json.dump(brief, brief_file)
+
+    print(f"Evaluation results for model {model} over dataset {dataset}:")
+    for k, v in brief.items():
+        print(f"{k}: {v}")
