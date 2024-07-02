@@ -156,15 +156,17 @@ class ESheafGCN_content_features(pl.LightningModule):
         emb0, xmap, embs, users_emb, pos_emb, neg_emb = self.encode_minibatch(users, pos_items, neg_items, self.adj)
         bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
 
-        loss_smap = torch.mean((xmap - emb0) * (xmap - emb0)) * self.sheaf_conv1.dimx
+        # loss_smap = torch.mean((xmap - emb0) * (xmap - emb0)) * self.sheaf_conv1.dimx
 
-        w_smap, w_bpr = compute_loss_weights_simple(loss_smap, bpr_loss, 1024)
-        loss = w_smap * loss_smap + w_bpr * bpr_loss
-        self.log('loss_smap', loss_smap)
+        # w_smap, w_bpr = compute_loss_weights_simple(loss_smap, bpr_loss, 1024)
+        loss = bpr_loss #w_smap * loss_smap + w_bpr * bpr_loss
         self.log('bpr_loss', bpr_loss)
-        self.log('loss', loss)
-        self.log("w_smap", w_smap)
-        self.log("w_bpr", w_bpr)
+
+        # self.log('loss_smap', loss_smap)
+        # self.log('bpr_loss', bpr_loss)
+        # self.log('loss', loss)
+        # self.log("w_smap", w_smap)
+        # self.log("w_bpr", w_bpr)
         return loss
 
     def configure_optimizers(self):
@@ -182,7 +184,7 @@ class ESheafGCN_content_features(pl.LightningModule):
 
         print(all_params)
 
-        return torch.optim.Adam(all_params, lr=0.001)
+        return torch.optim.Adam(all_params, lr=0.0001)
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         emb0 = self.eval_emb()
