@@ -39,7 +39,7 @@ def serialize_dataset(filename, datamodule):
 @click.option("--model", default="LightGCN", type=str)
 @click.option("--dataset", default="FACEBOOK", type=str)
 @click.option("--latent_dim", default=40, type=int)
-@click.option("--dataset_dir", default="../data", type=str)
+@click.option("--dataset_dir", default="data/", type=str)
 @click.option("--batch_size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
