@@ -3,6 +3,7 @@ import torch
 import click
 import json
 import pickle
+import pathlib
 
 import numpy as np
 import pandas as pd
@@ -68,7 +69,8 @@ def get_metrics(_df, k, user_embeddings, item_embeddings):
 @click.option("--dataset", default="LightGCN", type=str)
 @click.option("--epochs", default=5, type=int)
 @click.option("--artifact_dir", default="artifact/", type=str)
-def main(model, dataset, epochs, artifact_dir):
+@click.option("--report_dir", default="report/", type=str)
+def main(model, dataset, epochs, artifact_dir, report_dir):
     print("-----------------------------------------------")
     print("Running model with the following configuration:")
     print(f"model = {model}")
@@ -80,13 +82,18 @@ def main(model, dataset, epochs, artifact_dir):
     if os.getenv("CUDA_VISIBLE_DEVICE"):
         raise Exception("You need to fix CUDA_VISIBLE_DEVICE to desired device. Distributed training is not yet supported.")
 
-    with open(f"DATA_{model}_{dataset}_{epochs}.pickle", 'rb') as handle:
+    artifact_dir = pathlib.Path(artifact_dir)
+    report_dir = pathlib.Path(report_dir)
+
+    os.makedirs(report_dir, exist_ok=True)
+
+    with open(str(artifact_dir.joinpath(f"DATA_{model}_{dataset}_{epochs}.pickle")), 'rb') as handle:
         ml_data_module = pickle.load(handle)
 
     ml_1m_train = ml_data_module.train_dataset
     ml_1m_test = ml_data_module.test_dataset
 
-    model = MODELS[model].load_from_checkpoint(f"MODEL_{model}_{dataset}_{epochs}.pickle", dataset=ml_1m_train, latent_dim=40)
+    model = MODELS[model].load_from_checkpoint(str(artifact_dir.joinpath(f"MODEL_{model}_{dataset}_{epochs}.pickle")), dataset=ml_1m_train, latent_dim=40)
     model.eval()
 
     with torch.no_grad():
@@ -103,13 +110,13 @@ def main(model, dataset, epochs, artifact_dir):
     res = get_metrics(res, 20, user_embeddings, item_embeddings)
     res = get_metrics(res, 50, user_embeddings, item_embeddings)
 
-    res.to_csv(f"DETAILED_{model}_{dataset}_{epochs}.csv")
+    res.to_csv(str(report_dir.joinpath(f"DETAILED_{model}_{dataset}_{epochs}.csv")))
 
     brief = dict()
     for c in res.columns:
         brief[c] = res[c].mean()
 
-    with open(f"BRIEF_{model}_{dataset}_{epochs}.json", "w") as brief_file:
+    with open(str(report_dir.joinpath(f"BRIEF_{model}_{dataset}_{epochs}.json")), "w") as brief_file:
         json.dump(brief, brief_file)
 
     print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
