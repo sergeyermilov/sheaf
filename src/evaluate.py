@@ -115,3 +115,6 @@ def main(model, dataset, epochs, artifact_dir):
     print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
     for k, v in brief.items():
         print(f"{k}: {v}")
+
+if __name__ == "__main__":
+    main()
