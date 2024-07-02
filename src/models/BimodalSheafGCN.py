@@ -11,9 +11,9 @@ Our hypothesis is that item embeddings and user embeddings can be translated to 
 """
 
 
-class BimodalSheafGCN(nn.Module):
+class BimodalSheafGCNLayer(nn.Module):
     def __init__(self, dimx, dimy):
-        super(BimodalSheafGCN, self).__init__()
+        super(BimodalSheafGCNLayer, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
 
@@ -108,9 +108,9 @@ class BimodalSheafGCN(pl.LightningModule):
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
 
-        self.sheaf_conv3 = BimodalSheafGCN(latent_dim, latent_dim)
-        self.sheaf_conv2 = BimodalSheafGCN(latent_dim, latent_dim)
-        self.sheaf_conv1 = BimodalSheafGCN(latent_dim, latent_dim)
+        self.sheaf_conv3 = BimodalSheafGCNLayer(latent_dim, latent_dim)
+        self.sheaf_conv2 = BimodalSheafGCNLayer(latent_dim, latent_dim)
+        self.sheaf_conv1 = BimodalSheafGCNLayer(latent_dim, latent_dim)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = self.dataset.adjacency_matrix
