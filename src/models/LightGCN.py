@@ -28,11 +28,11 @@ class LightGCNConv(MessagePassing):
     return norm.view(-1, 1) * x_j
 
 
-class GCN(pl.LightningModule):
+class LightGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset):
-        super(GCN, self).__init__()
+        super(LightGCN, self).__init__()
         self.dataset = dataset
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.conv1 = GATConv(latent_dim, latent_dim, 1 ) #LightGCNConv()
