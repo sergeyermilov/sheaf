@@ -8,6 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
 from torch_geometric.utils import to_dense_adj
 
+MOVIE_LENS_DATASET_RELATIVE_PATH = "ml-1m/ratings.dat"
+
 
 class MovieLensDataset(Dataset):
     def __init__(self, df, random_state=42):

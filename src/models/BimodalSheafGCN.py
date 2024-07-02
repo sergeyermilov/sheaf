@@ -11,9 +11,9 @@ Our hypothesis is that item embeddings and user embeddings can be translated to 
 """
 
 
-class Sheaf_Conv_fixed(nn.Module):
+class BimodalSheafGCNLayer(nn.Module):
     def __init__(self, dimx, dimy):
-        super(Sheaf_Conv_fixed, self).__init__()
+        super(BimodalSheafGCNLayer, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
 
@@ -52,7 +52,7 @@ class Sheaf_Conv_fixed(nn.Module):
         m_u = torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
 
         if not compute_losses:
-            return m_u, None, None, None
+            return m_u
 
         # compute intermediate values for loss diff
         diff_x = (m_u - embeddings).unsqueeze(-1)
@@ -93,6 +93,10 @@ class Sheaf_Conv_fixed(nn.Module):
 
         return m_u, diff_loss, cons_loss, orth_loss
 
+    def init_parameters(self):
+        nn.init.xavier_uniform(self.user_operator.weight)
+        nn.init.xavier_uniform(self.item_operator.weight)
+
 
 class BimodalSheafGCN(pl.LightningModule):
     def __init__(self,
@@ -104,9 +108,9 @@ class BimodalSheafGCN(pl.LightningModule):
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
 
-        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim, latent_dim)
-        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim, latent_dim)
-        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim)
+        self.sheaf_conv3 = BimodalSheafGCNLayer(latent_dim, latent_dim)
+        self.sheaf_conv2 = BimodalSheafGCNLayer(latent_dim, latent_dim)
+        self.sheaf_conv1 = BimodalSheafGCNLayer(latent_dim, latent_dim)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = self.dataset.adjacency_matrix
@@ -126,22 +130,25 @@ class BimodalSheafGCN(pl.LightningModule):
     def init_parameters(self):
         nn.init.normal_(self.embedding.weight, std=0.1)
 
-        self.sheaf_conv1.user_operator.apply(self.init_weights)
-        self.sheaf_conv1.item_operator.apply(self.init_weights)
+        self.sheaf_conv1.init_parameters()
+        self.sheaf_conv2.init_parameters()
+        self.sheaf_conv3.init_parameters()
 
-        self.sheaf_conv2.user_operator.apply(self.init_weights)
-        self.sheaf_conv2.item_operator.apply(self.init_weights)
+    def forward_(self, adj_matrix):
+        emb0 = self.embedding.weight
+        m_u0, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(adj_matrix, emb0, self.edge_index, True)
+        m_u1 = self.sheaf_conv2(adj_matrix, m_u0, self.edge_index)
+        out = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
 
-        self.sheaf_conv3.user_operator.apply(self.init_weights)
-        self.sheaf_conv3.item_operator.apply(self.init_weights)
+        return out, diff_loss, cons_loss, orth_loss
 
     def forward(self, adj_matrix):
         emb0 = self.embedding.weight
-        m_u0, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(adj_matrix, emb0, self.edge_index, True)
-        m_u1, _, _, _ = self.sheaf_conv2(adj_matrix, m_u0, self.edge_index)
-        out, _, _, _ = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
+        m_u0 = self.sheaf_conv1(adj_matrix, emb0, self.edge_index)
+        m_u1 = self.sheaf_conv2(adj_matrix, m_u0, self.edge_index)
+        out = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
 
-        return out, diff_loss, cons_loss, orth_loss
+        return emb0, out
 
     def training_step(self, batch, batch_idx):
         users, pos_items, neg_items = batch
@@ -170,7 +177,7 @@ class BimodalSheafGCN(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=0.001)
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
-        out, diff_loss, cons_loss, orth_loss = self.forward(edge_index)
+        out, diff_loss, cons_loss, orth_loss = self.forward_(edge_index)
 
         return (
             out,
