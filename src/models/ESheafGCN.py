@@ -2,17 +2,16 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_bpr_loss_with_reg
-
+from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 
 def debug_print_tensor(x, prefix):
     print("Tensor name: " + prefix)
     print(f"shape = {x.shape}")
     print(x)
 
-class Sheaf_Conv_fixed(nn.Module):
+class ESheafLayer(nn.Module):
     def __init__(self, dimx, dimy, nsmat=64):
-        super(Sheaf_Conv_fixed, self).__init__()
+        super(ESheafLayer, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
 
@@ -32,9 +31,13 @@ class Sheaf_Conv_fixed(nn.Module):
                                      nn.ReLU(),
                                      nn.Linear(nsmat, self.dimy * self.dimx))
 
-    def forward(self, w, x):
+    def forward(self, w, x, compute_loss=False):
         smat = torch.reshape(self.fc_smat(x), (-1, self.dimy, self.dimx))
         q = torch.bmm(smat, x.unsqueeze(-1)).squeeze(-1)
+
+        if not compute_loss:
+            return q
+
         y = torch.tensordot(w, q, dims=([1], [0]))
         xmap = torch.einsum('ijk,ij->ik', smat, y)
         rmat = torch.einsum('ijk,ilk->lji', smat, smat)
@@ -58,9 +61,9 @@ class ESheafGCN(pl.LightningModule):
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
-        self.sheaf_conv1 = Sheaf_Conv_fixed(latent_dim, latent_dim*2, 40)
-        self.sheaf_conv2 = Sheaf_Conv_fixed(latent_dim*2, latent_dim*2, 40)
-        self.sheaf_conv3 = Sheaf_Conv_fixed(latent_dim*2, latent_dim*2, 40)
+        self.sheaf_conv1 = ESheafLayer(latent_dim, latent_dim*2, 40)
+        self.sheaf_conv2 = ESheafLayer(latent_dim*2, latent_dim*2, 40)
+        self.sheaf_conv3 = ESheafLayer(latent_dim*2, latent_dim*2, 40)
 
         self.adj = self.dataset.adjacency_matrix
         degree = self.adj.sum(dim=1)
@@ -82,13 +85,20 @@ class ESheafGCN(pl.LightningModule):
         self.sheaf_conv2.fc_smat.apply(self.init_weights)
         self.sheaf_conv3.fc_smat.apply(self.init_weights)
 
-    def forward(self, adj_matrix):
-       emb0 = self.embedding.weight
-       xmap, y1, rmat, smat, smat_proj = self.sheaf_conv1(adj_matrix, emb0)
-       _, y2, _, _, _ = self.sheaf_conv2(adj_matrix, y1)
-       _, y3, _, _, _ = self.sheaf_conv3(adj_matrix, y2)
+    def forward_(self, adj_matrix):
+        emb0 = self.embedding.weight
+        xmap, y1, rmat, smat, smat_proj = self.sheaf_conv1(adj_matrix, emb0, True)
+        y2 = self.sheaf_conv2(adj_matrix, y1, False)
+        y3 = self.sheaf_conv3(adj_matrix, y2, False)
 
-       return emb0, xmap, y1, y3, rmat, smat, smat_proj
+        return emb0, xmap, y1, y3, rmat, smat, smat_proj
+
+    def forward(self, adj_matrix):
+        emb0 = self.embedding.weight
+        y1 = self.sheaf_conv1(adj_matrix, emb0, False)
+        y2 = self.sheaf_conv2(adj_matrix, y1, False)
+        y3 = self.sheaf_conv3(adj_matrix, y2, False)
+        return emb0, y3
 
     def training_step(self, batch, batch_idx):
         users, pos_items, neg_items = batch
@@ -116,7 +126,7 @@ class ESheafGCN(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=0.001)
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
-        emb0, xmap, y, out, rmat, smat, smat_proj = self.forward(edge_index)
+        emb0, xmap, y, out, rmat, smat, smat_proj = self.forward_(edge_index)
      #   debug_print_tensor(y, "Y")
      #   debug_print_tensor(pos_items, "pos_items")
      #   debug_print_tensor(neg_items, "neg_items")
