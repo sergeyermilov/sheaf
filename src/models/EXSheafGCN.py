@@ -139,8 +139,8 @@ class EXSheafGCN(pl.LightningModule):
     def forward_(self, adj_matrix):
         emb0 = self.embedding.weight
         m_u0, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(adj_matrix, emb0, self.edge_index, True)
-        m_u1, _, _, _ = self.sheaf_conv2(adj_matrix, m_u0, self.edge_index)
-        out, _, _, _ = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
+        m_u1 = self.sheaf_conv2(adj_matrix, m_u0, self.edge_index)
+        out = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
 
         return out, diff_loss, cons_loss, orth_loss
 

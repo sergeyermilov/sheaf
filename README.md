@@ -1,1 +1,1 @@
-CUDA_LAUNCH_BLOCKING=1 python -m src.train
+CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python -m src.train --model ESheafGCN
