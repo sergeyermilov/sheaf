@@ -44,7 +44,8 @@ def serialize_dataset(filename, datamodule):
 @click.option("--batch_size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
-def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device):
+@click.option("--artifact_dir", default="artifact/", type=str)
+def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device, artifact_dir):
     print("-----------------------------------------------")
     print("Running model with the following configuration:")
     print(f"model = {model}")
@@ -55,6 +56,8 @@ def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device):
     print(f"epochs = {epochs}")
     print(f"device = {device}")
     print("-----------------------------------------------")
+    artifact_dir = pathlib.Path(artifact_dir)
+    os.makedirs(artifact_dir, exist_ok=True)
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
         raise Exception("You need to fix CUDA_VISIBLE_DEVICE to desired device. Distributed training is not yet supported.")
@@ -67,13 +70,14 @@ def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device):
     dataset_path = str(pathlib.Path(dataset_dir).joinpath(dataset_path))
     ml_data_module = dataset_class(dataset_path, batch_size=batch_size)
     ml_data_module.setup()
-    serialize_dataset(f"DATA_{model}_{dataset}.pickle", ml_data_module)
+
+    serialize_dataset(str(artifact_dir.joinpath(f"DATA_{model}_{dataset}_{epochs}.pickle")), ml_data_module)
 
     train_dataloader = ml_data_module.train_dataloader()
-    model = model_class(latent_dim=latent_dim, dataset=ml_data_module.train_dataset)
+    model_instance = model_class(latent_dim=latent_dim, dataset=ml_data_module.train_dataset)
     trainer = Trainer(max_epochs=epochs, log_every_n_steps=1)
-    trainer.fit(model, train_dataloader)
-    trainer.save_checkpoint(f"MODEL_{model}_{dataset}.pickle")
+    trainer.fit(model_instance, train_dataloader)
+    trainer.save_checkpoint(str(artifact_dir.joinpath(f"MODEL_{model}_{dataset}_{epochs}.pickle")))
 
 
 if __name__ == "__main__":
