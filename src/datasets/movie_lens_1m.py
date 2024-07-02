@@ -11,9 +11,13 @@ import numpy as np
 import torch.nn as nn
 import torch
 
+MOVIE_LENS_DATASET_RELATIVE_PATH = "ml-1m/ratings.dat"
+
 
 class MovieLensDataset(Dataset):
-    def __init__(self, df):
+    def __init__(self, df, random_state=42):
+        random.seed(random_state)
+
         # Unique user and items ids as numpy array
         self.pandas_data = df
         self.user_ids = self.pandas_data.user_id.unique()
@@ -22,17 +26,13 @@ class MovieLensDataset(Dataset):
         self.num_users = len(self.user_ids)
         self.num_items = len(self.item_ids)
 
-        print(self.num_users)
-        print(self.num_items)
-
         # Create graph
         self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(
             list).reset_index()
         
 
-        u_t = torch.LongTensor(self.pandas_data.user_id_idx.values)
-        i_t = torch.LongTensor(self.pandas_data.item_id_idx.values) + self.num_users
-
+        u_t = torch.tensor(self.pandas_data.user_id_idx.values, dtype=torch.long)
+        i_t = torch.tensor(self.pandas_data.item_id_idx.values, dtype=torch.long) + self.num_users
 
         self.train_edge_index = torch.stack((
             torch.cat([u_t, i_t]),
@@ -42,25 +42,15 @@ class MovieLensDataset(Dataset):
         self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
 
     def __len__(self):
-        # return len(self.user_ids)
-        return len(self.pandas_data)
-
-    # def __getitem__(self, idx):
-    #     # raise NotImplementedError
-    #     row = self.interacted_items_by_user_idx.iloc[idx]
-    #     user_idx = row["user_id_idx"]
-    #     pos_item_idx = random.choice(row["item_id_idx"]) + self.num_users
-    #     neg_item_idx = self.sample_neg(row["item_id_idx"]) + self.num_users
-    #     return torch.tensor(user_idx), torch.tensor(pos_item_idx), torch.tensor(neg_item_idx)
+        return self.pandas_data.shape[0]
 
     def __getitem__(self, idx):
-        # raise NotImplementedError
-        row = self.pandas_data.iloc[idx]
+        user_idx = self.pandas_data["user_id_idx"].iloc[idx]
+        row = self.interacted_items_by_user_idx.iloc[user_idx]
         user_idx = row["user_id_idx"]
-        pos_item_idx = row["item_id_idx"] + self.num_users
-        all_pos = self.interacted_items_by_user_idx[self.interacted_items_by_user_idx["user_id_idx"] == user_idx].item_id_idx
-        neg_item_idx = self.sample_neg(all_pos) + self.num_users
-        return torch.tensor(user_idx), torch.tensor(pos_item_idx), torch.tensor(neg_item_idx)
+        pos_item_idx = random.choice(row["item_id_idx"])
+        neg_item_idx = self.sample_neg(row["item_id_idx"])
+        return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(neg_item_idx + self.num_users)
 
     def sample_neg(self, x):
         while True:
@@ -69,7 +59,7 @@ class MovieLensDataset(Dataset):
                 return neg_id
 
 class MovieLensDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='::', batch_size=32, content_feature=False):
+    def __init__(self, ratings_file, sep='::', batch_size=32, content_feature=False, random_state=42):
         super().__init__()
         self.content_feature = content_feature
         self.batch_size = batch_size
@@ -79,8 +69,8 @@ class MovieLensDataModule(LightningDataModule):
         self.pandas_data = self.pandas_data[self.pandas_data['rating'] >= 3]
 
         # Train/val/test splitting
-        train, test = train_test_split(self.pandas_data, test_size=0.2)
-        val, test = train_test_split(test, test_size=0.5)
+        train, test = train_test_split(self.pandas_data, test_size=0.2, random_state=random_state)
+        val, test = train_test_split(test, test_size=0.5, random_state=random_state)
         self.train_df = pd.DataFrame(train, columns=self.pandas_data.columns)
         self.val_df = pd.DataFrame(val, columns=self.pandas_data.columns)
         self.test_df = pd.DataFrame(test, columns=self.pandas_data.columns)
