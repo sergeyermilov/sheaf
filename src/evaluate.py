@@ -80,6 +80,7 @@ def main(model, dataset, epochs, artifact_dir, report_dir, device):
     print(f"dataset = {dataset}")
     print(f"epochs = {epochs}")
     print(f"artifact_dir = {artifact_dir}")
+    print(f"device = {device}")
     print("-----------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
