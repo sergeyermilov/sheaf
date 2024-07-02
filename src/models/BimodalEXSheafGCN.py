@@ -104,9 +104,13 @@ class BimodalEXSheafGCNLayer(nn.Module):
         return m_u, diff_loss, cons_loss, orth_loss
 
     def init_parameters(self):
+        def init(layer):
+            if type(layer) == nn.Linear:
+                nn.init.xavier_uniform(layer.weight)
+
         nn.init.xavier_uniform(self.user_operator.data)
         nn.init.xavier_uniform(self.item_operator.data)
-        nn.init.xavier_uniform(self.fc_smat.weight)
+        self.fc_smat.apply(init)
 
 
 class BimodalEXSheafGCN(pl.LightningModule):
