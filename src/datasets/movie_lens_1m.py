@@ -59,9 +59,8 @@ class MovieLensDataset(Dataset):
                 return neg_id
 
 class MovieLensDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='::', batch_size=32, content_feature=False, random_state=42):
+    def __init__(self, ratings_file, sep='::', batch_size=32, random_state=42):
         super().__init__()
-        self.content_feature = content_feature
         self.batch_size = batch_size
 
         COLUMNS_NAME = ['user_id', 'item_id', 'rating', "timestamp"]
@@ -105,16 +104,38 @@ class MovieLensDataModule(LightningDataModule):
         self.train_dataset = MovieLensDataset(self.train_df)
         self.val_dataset = MovieLensDataset(self.val_df)
         self.test_dataset = MovieLensDataset(self.test_df)
-        if self.content_feature:
-            raw_embeds, embed_layers_config = self.build_embeds(self.train_dataset.num_users, self.train_dataset.num_items)
-            self.train_dataset.raw_embeds = raw_embeds
-            self.train_dataset.embed_layers_config = embed_layers_config
+        
+
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=self.batch_size)
+
+
+
+class MovieLensDataModule_CF(MovieLensDataModule):
+    def __init__(self, ratings_file, sep='::', batch_size=32, random_state=42):
+        super().__init__(ratings_file, sep, batch_size, random_state)
+
+    def setup(self):
+        # Assign train/val datasets for use in dataloaders
+        self.train_dataset = MovieLensDataset(self.train_df)
+        self.val_dataset = MovieLensDataset(self.val_df)
+        self.test_dataset = MovieLensDataset(self.test_df)
+
+        raw_embeds, embed_layers_config = self.build_embeds(self.train_dataset.num_users, self.train_dataset.num_items)
+        self.train_dataset.raw_embeds = raw_embeds
+        self.train_dataset.embed_layers_config = embed_layers_config
 
 
     def build_embeds(self, num_u, num_v):
 
         # process users
-        embeds_users = torch.zeros((num_u, 3)).long()
+        embeds_users = np.zeros((num_u, 3))
         cols_users = ['idx', 'sex', 'age_group' ,'occupation', 'zipcode']
         data_users = pd.read_csv('data/ml-1m/users.dat', sep='::', names=cols_users, engine='python')
         
@@ -124,14 +145,15 @@ class MovieLensDataModule(LightningDataModule):
             data_users[col] = encoder.fit_transform(data_users[col])
             num_unique_users.append(encoder.classes_.shape[0])
 
-        user_vectors = torch.LongTensor(data_users[['sex', 'age_group', 'occupation']].values)
+        user_vectors = data_users[['sex', 'age_group', 'occupation']].values
         embeds_users[np.arange(num_u)] = user_vectors[self.label_encoder_user.inverse_transform(np.arange(num_u)) - 1]
+        embeds_users = torch.LongTensor(embeds_users)
 
         # process items
         genres = ['Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime', 'Documentary', 'Drama',
 	              'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
 
-        embeds_items = torch.zeros((num_v, 1 + len(genres))).long()
+        embeds_items = np.zeros((num_v, 1 + len(genres)))
 
         cols_items = ['idx', 'name', 'genres']
         data_items = pd.read_csv('data/ml-1m/movies.dat', sep='::', names=cols_items, engine='python')
@@ -147,30 +169,10 @@ class MovieLensDataModule(LightningDataModule):
             np.arange(len(genres)), genre_encoder.transform(x.split('|'))
             ), 1, 0)).values)
         
-        item_embeds = torch.hstack([torch.LongTensor(years).view(-1, 1), torch.LongTensor(genres_embed)])
+        item_embeds = np.hstack([years.reshape(-1, 1), genres_embed])
         embeds_items[np.arange(num_v)] = item_embeds[idx_encoder.transform(self.label_encoder_item.inverse_transform(np.arange(num_v)))]
+        embeds_items = torch.LongTensor(embeds_items)
 
         num_unique_items = [years_encoder.classes_.shape[0], len(genres)]
 
         return {'users': embeds_users, 'items': embeds_items}, {'users': num_unique_users, 'items': num_unique_items}
-        
-
-
-        
-
-    def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
-
-
-
-
-
-if __name__ == "__main__":
-    ml_module = MovieLensDataModule('data/ml-1m/ratings.dat')
-    ml_module.setup()

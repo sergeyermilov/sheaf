@@ -1,6 +1,6 @@
 
 import torch
-import pytorch_lightning as pl
+import lightning.pytorch.core as pl
 from torch import nn
 from torch_geometric.nn import GATConv
 from torch_geometric.nn.conv import MessagePassing

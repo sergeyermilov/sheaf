@@ -4,23 +4,33 @@ import torch
 import pickle
 import pathlib
 
-from pytorch_lightning import Trainer
+import wandb
+
+from lightning.pytorch import Trainer
+from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 from src.datasets.facebook import FacebookDataModule, FACEBOOK_DATASET_RELATIVE_PATH
-from src.datasets.movie_lens_1m import MovieLensDataModule, MOVIE_LENS_DATASET_RELATIVE_PATH
+from src.datasets.movie_lens_1m import (
+    MovieLensDataModule,
+    MovieLensDataModule_CF,
+    MOVIE_LENS_DATASET_RELATIVE_PATH)
 from src.datasets.yahoo_movies import YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH
 
 from src.models.EXSheafGCN import EXSheafGCN
-from src.models.ESheafGCN import ESheafGCN
+from src.models.ESheafGCN import ESheafGCN, ESheafGCN_content_features
 from src.models.BimodalSheafGCN import BimodalSheafGCN
 from src.models.BimodalEXSheafGCN import BimodalEXSheafGCN
 from src.models.LightGCN import LightGCN
 from src.models.GAT import GAT
 from src.models.SheafGCN import SheafGCN
 
+wandb.init(project="sheaf")
+
 MODELS = {
     "EXSheafGCN": EXSheafGCN,
     "ESheafGCN": ESheafGCN,
+    "ESheafGCN_CF": ESheafGCN_content_features,
     "BimodalSheafGCN": BimodalSheafGCN,
     "BimodalEXSheafGCN": BimodalEXSheafGCN,
     "LightGCN": LightGCN,
@@ -31,6 +41,7 @@ MODELS = {
 DATASETS = {
     "FACEBOOK": (FacebookDataModule, FACEBOOK_DATASET_RELATIVE_PATH),
     "MOVIELENS": (MovieLensDataModule, MOVIE_LENS_DATASET_RELATIVE_PATH),
+    "MOVIELENS_CF": (MovieLensDataModule_CF, MOVIE_LENS_DATASET_RELATIVE_PATH),
     "YAHOO": (YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH)
 }
 
@@ -77,7 +88,11 @@ def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device, ar
 
     train_dataloader = ml_data_module.train_dataloader()
     model_instance = model_class(latent_dim=latent_dim, dataset=ml_data_module.train_dataset)
-    trainer = Trainer(max_epochs=epochs, log_every_n_steps=1)
+
+    wandb_logger = WandbLogger(log_model="all")
+    checkpoint_callback = ModelCheckpoint(monitor="loss", mode="min")
+    
+    trainer = Trainer(max_epochs=epochs, log_every_n_steps=5, logger=wandb_logger, callbacks=[checkpoint_callback])
     trainer.fit(model_instance, train_dataloader)
     trainer.save_checkpoint(str(artifact_dir.joinpath(f"MODEL_{model}_{dataset}_{epochs}.pickle")))
 
