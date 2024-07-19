@@ -21,14 +21,16 @@ from src.models.LightGCN import LightGCN
 from src.models.GAT import GAT
 
 MODELS = {
+    # sheaf models
     "GEXSheafGCN": GEXSheafGCN,
     "ESheafGCN": ESheafGCN,
     "XSheafGCN": XSheafGCN,
     "GXSheafGCN": GXSheafGCN,
     "GSheafGCN": GSheafGCN,
+    "SheafGCN": SheafGCN,
+    # other models
     "LightGCN": LightGCN,
     "GAT": GAT,
-    "SheafGCN": SheafGCN,
 }
 
 

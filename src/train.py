@@ -14,6 +14,7 @@ from src.models.sheaf.XSheafGCN import XSheafGCN
 from src.models.sheaf.ESheafGCN import ESheafGCN
 from src.models.sheaf.GSheafGCN import GSheafGCN
 from src.models.sheaf.GXSheafGCN import GXSheafGCN
+from src.models.sheaf.GEXSheafGCN import GEXSheafGCN
 from src.models.sheaf.SheafGCN import SheafGCN
 
 from src.models.LightGCN import LightGCN
@@ -21,10 +22,11 @@ from src.models.GAT import GAT
 
 MODELS = {
     # sheaf models
-    "XSheafGCN": XSheafGCN,
+    "GEXSheafGCN": GEXSheafGCN,
     "ESheafGCN": ESheafGCN,
-    "GSheafGCN": GSheafGCN,
+    "XSheafGCN": XSheafGCN,
     "GXSheafGCN": GXSheafGCN,
+    "GSheafGCN": GSheafGCN,
     "SheafGCN": SheafGCN,
     # graph models
     "LightGCN": LightGCN,
