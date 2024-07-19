@@ -18,7 +18,7 @@ def compute_loss_weights_simple(loss_orth, loss_bpr, nbatch, kappa=1.0e0, eps=1.
 
 
 def compute_neural_network_parameters(nnet, nepoch, nbatch, lr, w, x):
-    nnet.fc_smat.requires_grad_(True)
+    nnet.fc_smat_pair.requires_grad_(True)
     print('nbatch = ' + str(nbatch))
     optimizer = optim.Adam(nnet.parameters(), lr=lr, weight_decay=0.0)
     loss_data = np.zeros((nepoch + 1))

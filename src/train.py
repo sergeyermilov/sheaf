@@ -10,22 +10,25 @@ from src.datasets.facebook import FacebookDataModule, FACEBOOK_DATASET_RELATIVE_
 from src.datasets.movie_lens_1m import MovieLensDataModule, MOVIE_LENS_DATASET_RELATIVE_PATH
 from src.datasets.yahoo_movies import YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH
 
-from src.models.EXSheafGCN import EXSheafGCN
-from src.models.ESheafGCN import ESheafGCN
-from src.models.BimodalSheafGCN import BimodalSheafGCN
-from src.models.BimodalEXSheafGCN import BimodalEXSheafGCN
+from src.models.sheaf.XSheafGCN import XSheafGCN
+from src.models.sheaf.ESheafGCN import ESheafGCN
+from src.models.sheaf.GSheafGCN import GSheafGCN
+from src.models.sheaf.GXSheafGCN import GXSheafGCN
+from src.models.sheaf.SheafGCN import SheafGCN
+
 from src.models.LightGCN import LightGCN
 from src.models.GAT import GAT
-from src.models.SheafGCN import SheafGCN
 
 MODELS = {
-    "EXSheafGCN": EXSheafGCN,
+    # sheaf models
+    "XSheafGCN": XSheafGCN,
     "ESheafGCN": ESheafGCN,
-    "BimodalSheafGCN": BimodalSheafGCN,
-    "BimodalEXSheafGCN": BimodalEXSheafGCN,
+    "GSheafGCN": GSheafGCN,
+    "GXSheafGCN": GXSheafGCN,
+    "SheafGCN": SheafGCN,
+    # graph models
     "LightGCN": LightGCN,
     "GAT": GAT,
-    "SheafGCN": SheafGCN,
 }
 
 DATASETS = {
@@ -34,9 +37,11 @@ DATASETS = {
     "YAHOO": (YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH)
 }
 
+
 def serialize_dataset(filename, datamodule):
     with open(filename, 'wb') as handle:
         pickle.dump(datamodule, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 @click.command()
 @click.option("--model", default="LightGCN", type=str)
@@ -84,4 +89,3 @@ def main(model, dataset, latent_dim, dataset_dir, batch_size, epochs, device, ar
 
 if __name__ == "__main__":
     main()
-

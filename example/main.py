@@ -27,7 +27,7 @@ def performance_test():
     numv = 600
     dimy = 3
     w, x = generate_graph_weights_and_features(numv, dimy)
-    smat = torch.reshape(nnet.fc_smat(x), (-1, nnet.dimy, nnet.dimx))
+    smat = torch.reshape(nnet.fc_smat_pair(x), (-1, nnet.dimy, nnet.dimx))
     print(smat[0, :, :])
     s0 = smat[0, :, :].detach().cpu().numpy()
     print(np.dot(np.transpose(s0), s0))
