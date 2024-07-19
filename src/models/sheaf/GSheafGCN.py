@@ -8,12 +8,14 @@ from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 This approach works only for bipartite graphs with two entities!
 Here we compute two global matrices serving as linear operator for two entities users and items.
 Our hypothesis is that item embeddings and user embeddings can be translated to common linear space using this operator.
+
+G - stands for global matrices for users and items.
 """
 
 
-class BimodalSheafGCNLayer(nn.Module):
+class GSheafGCNLayer(nn.Module):
     def __init__(self, dimx, dimy):
-        super(BimodalSheafGCNLayer, self).__init__()
+        super(GSheafGCNLayer, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
 
@@ -98,19 +100,19 @@ class BimodalSheafGCNLayer(nn.Module):
         nn.init.xavier_uniform(self.item_operator.weight)
 
 
-class BimodalSheafGCN(pl.LightningModule):
+class GSheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset):
-        super(BimodalSheafGCN, self).__init__()
+        super(GSheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
 
-        self.sheaf_conv3 = BimodalSheafGCNLayer(latent_dim, latent_dim)
-        self.sheaf_conv2 = BimodalSheafGCNLayer(latent_dim, latent_dim)
-        self.sheaf_conv1 = BimodalSheafGCNLayer(latent_dim, latent_dim)
+        self.sheaf_conv3 = GSheafGCNLayer(latent_dim, latent_dim)
+        self.sheaf_conv2 = GSheafGCNLayer(latent_dim, latent_dim)
+        self.sheaf_conv1 = GSheafGCNLayer(latent_dim, latent_dim)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = self.dataset.adjacency_matrix

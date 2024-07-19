@@ -10,22 +10,27 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.models.EXSheafGCN import EXSheafGCN
-from src.models.ESheafGCN import ESheafGCN
-from src.models.BimodalSheafGCN import BimodalSheafGCN
-from src.models.BimodalEXSheafGCN import BimodalEXSheafGCN
+from src.models.sheaf.GEXSheafGCN import GEXSheafGCN
+from src.models.sheaf.XSheafGCN import XSheafGCN
+from src.models.sheaf.GXSheafGCN import GXSheafGCN
+from src.models.sheaf.GSheafGCN import GSheafGCN
+from src.models.sheaf.ESheafGCN import ESheafGCN
+from src.models.sheaf.SheafGCN import SheafGCN
+
 from src.models.LightGCN import LightGCN
 from src.models.GAT import GAT
-from src.models.SheafGCN import SheafGCN
 
 MODELS = {
-    "EXSheafGCN": EXSheafGCN,
+    # sheaf models
+    "GEXSheafGCN": GEXSheafGCN,
     "ESheafGCN": ESheafGCN,
-    "BimodalSheafGCN": BimodalSheafGCN,
-    "BimodalEXSheafGCN": BimodalEXSheafGCN,
+    "XSheafGCN": XSheafGCN,
+    "GXSheafGCN": GXSheafGCN,
+    "GSheafGCN": GSheafGCN,
+    "SheafGCN": SheafGCN,
+    # other models
     "LightGCN": LightGCN,
     "GAT": GAT,
-    "SheafGCN": SheafGCN,
 }
 
 
@@ -149,6 +154,7 @@ def main(model, dataset, epochs, artifact_dir, report_dir, device):
     print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
     for k, v in brief.items():
         print(f"{k}: {v}")
+
 
 if __name__ == "__main__":
     main()
