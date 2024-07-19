@@ -6,12 +6,17 @@ from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 
 """
 This is extension over an approach implemented in EXSheafGCN. Here we use FFN over two embeddings and two global matrices
-to compute linear operator. A = FFN(u, v) + Q_user if u is user node, and A = FFN(u, v) + Q_item if u is item node.  
+to compute linear operator. A(u, v) = FFN(u, v) + FFN(u) + U for u and v vectors (and vise versa).  
+
+G stands for global matrices
+E stands for (idk) Embeddings as features
+X stands for eXtended approach when computing matrices (we take both vectors)
 """
 
-class BimodalEXSheafGCNLayer(nn.Module):
+
+class GEXSheafGCNLayer(nn.Module):
     def __init__(self, dimx, dimy, nsmat=64):
-        super(BimodalEXSheafGCNLayer, self).__init__()
+        super(GEXSheafGCNLayer, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
 
@@ -19,21 +24,40 @@ class BimodalEXSheafGCNLayer(nn.Module):
 
         self.user_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
         self.item_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
-        self.fc_smat = nn.Sequential(nn.Linear(self.dimx * 2, nsmat),
-                                     nn.ReLU(),
-                                     nn.Linear(nsmat, nsmat),
-                                     nn.ReLU(),
-                                     nn.Linear(nsmat, nsmat),
-                                     nn.ReLU(),
-                                     nn.Linear(nsmat, nsmat),
-                                     nn.ReLU(),
-                                     nn.Linear(nsmat, nsmat),
-                                     nn.ReLU(),
-                                     nn.Linear(nsmat, nsmat),
-                                     nn.ReLU(),
-                                     nn.Linear(nsmat, nsmat),
-                                     nn.ReLU(),
-                                     nn.Linear(nsmat, self.dimy * self.dimx))
+        self.fc_smat_single = nn.Sequential(
+            nn.Linear(self.dimx, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, self.dimy * self.dimx)
+        )
+        self.fc_smat_pair = nn.Sequential(
+            nn.Linear(self.dimx * 2, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, nsmat),
+            nn.ReLU(),
+            nn.Linear(nsmat, self.dimy * self.dimx)
+        )
 
     def forward(self, adj_matrix, embeddings, edge_index, compute_losses: bool = False):
         # first half is users
@@ -49,14 +73,25 @@ class BimodalEXSheafGCNLayer(nn.Module):
         comb_uv = torch.concat([e_u, e_v], axis=-1)  # u, v -> A(u, v)
         comb_vu = torch.concat([e_v, e_u], axis=-1)  # v, u -> A(v, u)
 
-        smat_uv = torch.reshape(self.fc_smat(comb_uv), (-1, self.dimy, self.dimx))  # A(u, v)
+        smat = torch.reshape(self.fc_smat_single(embeddings), (-1, self.dimy, self.dimx))
+
+        # compute linear operator from pair of u and v features A(u, v) + A(u) + U
+        smat_uv = torch.reshape(self.fc_smat_pair(comb_uv), (-1, self.dimy, self.dimx))  # A(u, v)
+        # add global matrices
         smat_uv[:entity_separation, ...] += self.user_operator
         smat_uv[entity_separation:, ...] += self.item_operator
+        # add matrix computed from u features
+        smat_uv += smat[u, ...]
+
         smat_uv_t = torch.reshape(smat_uv, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
 
-        smat_vu = torch.reshape(self.fc_smat(comb_vu), (-1, self.dimy, self.dimx))  # A(v, u)
+        # compute linear operator from pair of u and v features A(v, u) + A(v) + V
+        smat_vu = torch.reshape(self.fc_smat_pair(comb_vu), (-1, self.dimy, self.dimx))  # A(v, u)
+        # add global matrices
         smat_vu[entity_separation:, ...] += self.user_operator
         smat_vu[:entity_separation, ...] += self.item_operator
+        # add matrix computed from v features
+        smat_vu += smat[v, ...]
 
         # compute h_v = A(u,v)^T A(v,u) * x(v)
         h_v_ = torch.bmm(smat_vu, e_v.unsqueeze(-1)).squeeze(-1)
@@ -110,22 +145,23 @@ class BimodalEXSheafGCNLayer(nn.Module):
 
         nn.init.xavier_uniform(self.user_operator.data)
         nn.init.xavier_uniform(self.item_operator.data)
-        self.fc_smat.apply(init)
+        self.fc_smat_pair.apply(init)
+        self.fc_smat_single.apply(init)
 
 
-class BimodalEXSheafGCN(pl.LightningModule):
+class GEXSheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset):
-        super(BimodalEXSheafGCN, self).__init__()
+        super(GEXSheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
 
-        self.sheaf_conv1 = BimodalEXSheafGCNLayer(latent_dim, latent_dim, 40)
-        self.sheaf_conv2 = BimodalEXSheafGCNLayer(latent_dim, latent_dim, 40)
-        self.sheaf_conv3 = BimodalEXSheafGCNLayer(latent_dim, latent_dim, 40)
+        self.sheaf_conv1 = GEXSheafGCNLayer(latent_dim, latent_dim, 40)
+        self.sheaf_conv2 = GEXSheafGCNLayer(latent_dim, latent_dim, 40)
+        self.sheaf_conv3 = GEXSheafGCNLayer(latent_dim, latent_dim, 40)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = self.dataset.adjacency_matrix
@@ -155,7 +191,6 @@ class BimodalEXSheafGCN(pl.LightningModule):
         out = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
 
         return out, diff_loss, cons_loss, orth_loss
-
 
     def forward(self, adj_matrix):
         emb0 = self.embedding.weight

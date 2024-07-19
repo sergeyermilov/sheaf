@@ -8,11 +8,14 @@ from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 This is extension over initial approach implemented in ESheafGCN. Instead of using feed forward network 
 over single node features, we use FFN over adjacent node features (two concatenated embeddings). The FFN computes linear
 operator that transforms node to common space.
+
+X stands for eXtension of previous approach (now we use user and item features).
 """
 
-class EXSheafGCNLayer(nn.Module):
+
+class XSheafGCNLayer(nn.Module):
     def __init__(self, dimx, dimy, nsmat=64):
-        super(EXSheafGCNLayer, self).__init__()
+        super(XSheafGCNLayer, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
 
@@ -101,19 +104,19 @@ class EXSheafGCNLayer(nn.Module):
         self.fc_smat.apply(init)
 
 
-class EXSheafGCN(pl.LightningModule):
+class XSheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset):
-        super(EXSheafGCN, self).__init__()
+        super(XSheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
 
-        self.sheaf_conv1 = EXSheafGCNLayer(latent_dim, latent_dim, 40)
-        self.sheaf_conv2 = EXSheafGCNLayer(latent_dim, latent_dim, 40)
-        self.sheaf_conv3 = EXSheafGCNLayer(latent_dim, latent_dim, 40)
+        self.sheaf_conv1 = XSheafGCNLayer(latent_dim, latent_dim, 40)
+        self.sheaf_conv2 = XSheafGCNLayer(latent_dim, latent_dim, 40)
+        self.sheaf_conv3 = XSheafGCNLayer(latent_dim, latent_dim, 40)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = self.dataset.adjacency_matrix
