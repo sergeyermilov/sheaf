@@ -10,23 +10,17 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.models.sheaf.GEXSheafGCN import GEXSheafGCN
-from src.models.sheaf.XSheafGCN import XSheafGCN
-from src.models.sheaf.GXSheafGCN import GXSheafGCN
-from src.models.sheaf.GSheafGCN import GSheafGCN
-from src.models.sheaf.ESheafGCN import ESheafGCN
+from src.models.sheaf.ExtendableSheafGCN import ExtendableSheafGCN
 from src.models.sheaf.SheafGCN import SheafGCN
+from src.models.sheaf.ESheafGCN import ESheafGCN
 
-from src.models.LightGCN import LightGCN
-from src.models.GAT import GAT
+from src.models.graph.LightGCN import LightGCN
+from src.models.graph.GAT import GAT
 
 MODELS = {
     # sheaf models
-    "GEXSheafGCN": GEXSheafGCN,
+    "ExtendableSheafGCN": ExtendableSheafGCN,
     "ESheafGCN": ESheafGCN,
-    "XSheafGCN": XSheafGCN,
-    "GXSheafGCN": GXSheafGCN,
-    "GSheafGCN": GSheafGCN,
     "SheafGCN": SheafGCN,
     # other models
     "LightGCN": LightGCN,
@@ -87,21 +81,35 @@ def get_metrics(_df, k, user_embeddings, item_embeddings):
 
 
 @click.command()
-@click.option("--model", default="LightGCN", type=str)
-@click.option("--dataset", default="LightGCN", type=str)
-@click.option("--epochs", default=5, type=int)
-@click.option("--artifact_dir", default="artifact/", type=str)
-@click.option("--report_dir", default="report/", type=str)
 @click.option("--device", default="cuda", type=str)
-def main(model, dataset, epochs, artifact_dir, report_dir, device):
-    print("-----------------------------------------------")
-    print("Running model with the following configuration:")
+@click.option("--artifact-id", type=str, required=True)
+@click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
+@click.option("--report-dir", default="report/", type=pathlib.Path)
+def main(device, artifact_id, artifact_dir, report_dir):
+    artifact_dir = artifact_dir.joinpath(artifact_id)
+
+    configs = None
+    with open(artifact_dir.joinpath("config.json"), "r") as fhandle:
+        configs = json.load(fhandle)
+
+    model = configs['model']
+    dataset = configs['dataset']
+    params = json.loads(configs['params'].replace("'", "\""))
+    batch_size = configs['batch_size']
+    epochs = configs['epochs']
+
+    print("------------------------------------------------")
+    print("Evaluate model with the following configuration:")
+    print("------------------------------------------------")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
+    print(f"params = {params}")
+    print(f"batch_size = {batch_size}")
     print(f"epochs = {epochs}")
-    print(f"artifact_dir = {artifact_dir}")
     print(f"device = {device}")
-    print("-----------------------------------------------")
+    print(f"artifact_dir = {artifact_dir}")
+    print(f"report_dir = {report_dir}")
+    print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
         raise Exception(
@@ -112,19 +120,17 @@ def main(model, dataset, epochs, artifact_dir, report_dir, device):
 
     torch.set_default_device(device)
 
-    artifact_dir = pathlib.Path(artifact_dir)
-    report_dir = pathlib.Path(report_dir)
-
     os.makedirs(report_dir, exist_ok=True)
 
-    with open(str(artifact_dir.joinpath(f"DATA_{model}_{dataset}_{epochs}.pickle")), 'rb') as handle:
+    with open(artifact_dir.joinpath(f"data.pickle"), 'rb') as handle:
         ml_data_module = pickle.load(handle)
 
     train_dataset = ml_data_module.train_dataset
     test_dataset = ml_data_module.test_dataset
 
     model_instance = MODELS[model].load_from_checkpoint(
-        str(artifact_dir.joinpath(f"MODEL_{model}_{dataset}_{epochs}.pickle")), dataset=train_dataset, latent_dim=40)
+        artifact_dir.joinpath(f"model.pickle"), dataset=train_dataset, **params
+    )
     model_instance.eval()
     model_instance = model_instance.to(device)
 
@@ -142,13 +148,13 @@ def main(model, dataset, epochs, artifact_dir, report_dir, device):
     res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings)
     res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings)
 
-    res.to_csv(str(report_dir.joinpath(f"DETAILED_{model}_{dataset}_{epochs}.csv")))
+    res.to_csv(report_dir.joinpath(f"report.csv"))
 
     brief = dict()
     for c in itertools.chain(metrics_5, metrics_10, metrics_20, metrics_50):
         brief[c] = res[c].mean()
 
-    with open(str(report_dir.joinpath(f"BRIEF_{model}_{dataset}_{epochs}.json")), "w") as brief_file:
+    with open(report_dir.joinpath(f"brief.json"), "w") as brief_file:
         json.dump(brief, brief_file)
 
     print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
