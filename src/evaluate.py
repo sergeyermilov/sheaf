@@ -97,6 +97,7 @@ def main(device, artifact_id, artifact_dir, report_dir):
     params = json.loads(configs['params'].replace("'", "\""))
     batch_size = configs['batch_size']
     epochs = configs['epochs']
+    split = configs['split']
 
     print("------------------------------------------------")
     print("Evaluate model with the following configuration:")
@@ -109,6 +110,7 @@ def main(device, artifact_id, artifact_dir, report_dir):
     print(f"device = {device}")
     print(f"artifact_dir = {artifact_dir}")
     print(f"report_dir = {report_dir}")
+    print(f"split = {split}")
     print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):

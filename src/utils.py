@@ -1,8 +1,9 @@
+import json
+import pickle
 import hashlib
 import pathlib
-import pickle
+
 from functools import partial
-import json
 
 
 def serialize_dataset(filename, datamodule):
