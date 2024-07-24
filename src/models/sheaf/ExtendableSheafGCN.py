@@ -128,8 +128,8 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
 
         operator_by_embedding = torch.reshape(self.fc_smat(embeddings), (-1, self.dimy, self.dimx))
 
-        operators.operator_uv += operator_by_embedding[u_indices]
-        operators.operator_vu += operator_by_embedding[v_indices]
+        operators.operator_uv += operator_by_embedding[u_indices, ...]
+        operators.operator_vu += operator_by_embedding[v_indices, ...]
 
         return operators
 
