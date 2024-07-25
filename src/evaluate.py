@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from src.models.best.ease import EASE
+from src.models.best.top import TopKPopularity
 from src.models.sheaf.ExtendableSheafGCN import ExtendableSheafGCN
 from src.models.sheaf.SheafGCN import SheafGCN
 from src.models.sheaf.ESheafGCN import ESheafGCN
@@ -25,6 +27,8 @@ MODELS = {
     # other models
     "LightGCN": LightGCN,
     "GAT": GAT,
+    "TopKPopularity": TopKPopularity,
+    "EASE": EASE
 }
 
 
@@ -59,7 +63,7 @@ def ndcg_at_k(score, k=None):
     return ndcg
 
 
-def get_metrics(_df, k, user_embeddings, item_embeddings):
+def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_evaluation=False):
     reco_k = f"reco_{k}"
     intersected_k = f"intersected_{k}"
     recall_k = f"recall_{k}"
@@ -67,8 +71,14 @@ def get_metrics(_df, k, user_embeddings, item_embeddings):
     ranks_k = f'ranks_{k}'
     ndcg_k = f"ndcg_{k}"
 
-    _df[reco_k] = _df.progress_apply(
-        lambda x: evaluate(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k), axis=1)
+    if is_alternate_evaluation:
+        _df[reco_k] = _df.progress_apply(
+            lambda x: model.evaluate(x["interacted_id_idx"], k), axis=1)
+    else:
+        _df[reco_k] = _df.progress_apply(
+            lambda x: evaluate(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k), axis=1)
+
+
     _df[intersected_k] = _df.apply(lambda x: list(set(x[f"reco_{k}"]).intersection(x["item_id_idx"])), axis=1)
 
     _df[recall_k] = _df.apply(lambda x: len(x[f"intersected_{k}"]) / len(x["item_id_idx"]), axis=1)
@@ -134,21 +144,26 @@ def main(device, artifact_id, artifact_dir, report_dir):
     model_instance.eval()
     model_instance = model_instance.to(device)
 
-    with torch.no_grad():
-        _, embeddings = model_instance(train_dataset.adjacency_matrix.to(device))
-        user_embeddings, item_embeddings = torch.split(embeddings, (train_dataset.num_users, train_dataset.num_items))
-
     res = test_dataset.interacted_items_by_user_idx.copy(deep=True)
     interactions = train_dataset.interacted_items_by_user_idx.copy(deep=True).rename(
         columns={"item_id_idx": "interacted_id_idx"})
     res = res.merge(interactions, on=["user_id_idx"])
+    is_alternate_evaluation = True if model in ["TopKPopularity", "EASE"] else False
+    user_embeddings = None
+    item_embeddings = None
 
-    res, metrics_5 = get_metrics(res, 5, user_embeddings, item_embeddings)
-    res, metrics_10 = get_metrics(res, 10, user_embeddings, item_embeddings)
-    res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings)
-    res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings)
+    if not is_alternate_evaluation:
+        with torch.no_grad():
+            _, embeddings = model_instance(train_dataset.adjacency_matrix.to(device))
+            user_embeddings, item_embeddings = torch.split(embeddings,
+                                                           (train_dataset.num_users, train_dataset.num_items))
 
-    res.to_csv(report_dir.joinpath(f"report.csv"))
+    res, metrics_5 = get_metrics(res, 5, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
+    res, metrics_10 = get_metrics(res, 10, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
+    res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
+    res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
+
+    res.to_csv(report_dir.joinpath(f"report.csv"), index=False)
 
     brief = dict()
     for c in itertools.chain(metrics_5, metrics_10, metrics_20, metrics_50):
