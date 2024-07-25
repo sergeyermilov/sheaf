@@ -43,12 +43,12 @@ DATASETS = {
 @click.option("--model", default="LightGCN", type=str)
 @click.option("--dataset", default="FACEBOOK", type=str)
 @click.option("--split", default="simple", type=click.Choice(['time', 'simple']))
-@click.option("--params", "-p", type=str)
-@click.option("--dataset_dir", default="data/", type=pathlib.Path)
-@click.option("--batch_size", default=1024, type=int)
+@click.option("--params", default="{}", type=str)
+@click.option("--dataset-dir", default="data/", type=pathlib.Path)
+@click.option("--batch-size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
-@click.option("--artifact_dir", default="artifact/", type=pathlib.Path)
+@click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 def main(model, dataset, split, params, dataset_dir, batch_size, epochs, device, artifact_dir):
     artifact_params = dict(
         model=model,
