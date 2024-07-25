@@ -4,8 +4,6 @@ import click
 import torch
 import pathlib
 
-from functools import partial
-
 from pytorch_lightning import Trainer
 
 from src.utils import create_from_json_string
