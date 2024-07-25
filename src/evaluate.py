@@ -84,8 +84,7 @@ def get_metrics(_df, k, user_embeddings, item_embeddings):
 @click.option("--device", default="cuda", type=str)
 @click.option("--artifact-id", type=str, required=True)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
-@click.option("--report-dir", default="report/", type=pathlib.Path)
-def main(device, artifact_id, artifact_dir, report_dir):
+def main(device, artifact_id, artifact_dir):
     artifact_dir = artifact_dir.joinpath(artifact_id)
 
     configs = None
@@ -109,7 +108,6 @@ def main(device, artifact_id, artifact_dir, report_dir):
     print(f"epochs = {epochs}")
     print(f"device = {device}")
     print(f"artifact_dir = {artifact_dir}")
-    print(f"report_dir = {report_dir}")
     print(f"split = {split}")
     print("------------------------------------------------")
 
@@ -122,7 +120,7 @@ def main(device, artifact_id, artifact_dir, report_dir):
 
     torch.set_default_device(device)
 
-    os.makedirs(report_dir, exist_ok=True)
+    os.makedirs(artifact_dir, exist_ok=True)
 
     with open(artifact_dir.joinpath(f"data.pickle"), 'rb') as handle:
         ml_data_module = pickle.load(handle)
@@ -150,13 +148,13 @@ def main(device, artifact_id, artifact_dir, report_dir):
     res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings)
     res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings)
 
-    res.to_csv(report_dir.joinpath(f"report.csv"))
+    res.to_csv(artifact_dir.joinpath(f"report.csv"))
 
     brief = dict()
     for c in itertools.chain(metrics_5, metrics_10, metrics_20, metrics_50):
         brief[c] = res[c].mean()
 
-    with open(report_dir.joinpath(f"brief.json"), "w") as brief_file:
+    with open(artifact_dir.joinpath(f"brief.json"), "w") as brief_file:
         json.dump(brief, brief_file)
 
     print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
