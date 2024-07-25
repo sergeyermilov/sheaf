@@ -16,10 +16,10 @@ python -m src.train --model ESheafGCN --params "{'latent_dim':30}" --dataset $DA
 python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['global']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['global,single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['global,paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['single,paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['global,single,paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['global','single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['global','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['global','single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 
 
 [ ! -d "$ARTIFACT_DIR" ] && echo "Artifact directory $ARTIFACT_DIR does not exists!" && exit 1
