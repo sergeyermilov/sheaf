@@ -6,6 +6,8 @@ import pathlib
 
 from pytorch_lightning import Trainer
 
+from src.models.best.ease import EASE
+from src.models.best.top import TopKPopularity
 from src.utils import create_from_json_string
 from src.utils import serialize_dataset
 from src.utils import compute_artifact_id
@@ -29,6 +31,8 @@ MODELS = {
     # graph models
     "LightGCN": LightGCN,
     "GAT": GAT,
+    "TopKPopularity": TopKPopularity,
+    "EASE": EASE
 }
 
 DATASETS = {
