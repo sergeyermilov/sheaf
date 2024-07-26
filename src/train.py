@@ -12,9 +12,9 @@ from src.utils import create_from_json_string
 from src.utils import serialize_dataset
 from src.utils import compute_artifact_id
 
-from src.datasets.facebook import FacebookDataModule, FACEBOOK_DATASET_RELATIVE_PATH
-from src.datasets.movie_lens_1m import MovieLensDataModule, MOVIE_LENS_DATASET_RELATIVE_PATH
-from src.datasets.yahoo_movies import YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH
+from src.data.datasets.facebook import FacebookDataModule, FACEBOOK_DATASET_RELATIVE_PATH
+from src.data.datasets.movie_lens import MovieLensDataModule, MOVIE_LENS_1M_DATASET_RELATIVE_PATH, MOVIE_LENS_10M_DATASET_RELATIVE_PATH
+from src.data.datasets.yahoo_movies import YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH
 
 from src.models.sheaf.ExtendableSheafGCN import ExtendableSheafGCN
 from src.models.sheaf.SheafGCN import SheafGCN
@@ -37,7 +37,8 @@ MODELS = {
 
 DATASETS = {
     "FACEBOOK": (FacebookDataModule, FACEBOOK_DATASET_RELATIVE_PATH),
-    "MOVIELENS": (MovieLensDataModule, MOVIE_LENS_DATASET_RELATIVE_PATH),
+    "MOVIELENS1M": (MovieLensDataModule, MOVIE_LENS_1M_DATASET_RELATIVE_PATH),
+    "MOVIELENS10M": (MovieLensDataModule, MOVIE_LENS_10M_DATASET_RELATIVE_PATH),
     "YAHOO": (YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH)
 }
 
@@ -45,16 +46,18 @@ DATASETS = {
 @click.command()
 @click.option("--model", default="LightGCN", type=str)
 @click.option("--dataset", default="FACEBOOK", type=str)
-@click.option("--params", "-p", type=str)
-@click.option("--dataset_dir", default="data/", type=pathlib.Path)
-@click.option("--batch_size", default=1024, type=int)
+@click.option("--split", default="simple", type=click.Choice(['time', 'simple']))
+@click.option("--params", default="{}", type=str)
+@click.option("--dataset-dir", default="data/", type=pathlib.Path)
+@click.option("--batch-size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
-@click.option("--artifact_dir", default="artifact/", type=pathlib.Path)
-def main(model, dataset, params, dataset_dir, batch_size, epochs, device, artifact_dir):
+@click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
+def main(model, dataset, split, params, dataset_dir, batch_size, epochs, device, artifact_dir):
     artifact_params = dict(
         model=model,
         dataset=dataset,
+        split=split,
         epochs=epochs,
         batch_size=batch_size,
         params=params
@@ -68,6 +71,7 @@ def main(model, dataset, params, dataset_dir, batch_size, epochs, device, artifa
     print(f"model = {model}")
     print(f"dataset = {dataset}")
     print(f"params = {params}")
+    print(f"split = {split}")
     print(f"dataset_dir = {dataset_dir}")
     print(f"batch_size = {batch_size}")
     print(f"epochs = {epochs}")
