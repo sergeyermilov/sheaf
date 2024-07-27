@@ -164,7 +164,7 @@ def main(device, artifact_id, artifact_dir):
     res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
     res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
 
-    res.to_csv(report_dir.joinpath(f"report.csv"), index=False)
+    res.to_csv(artifact_dir.joinpath(f"report.csv"), index=False)
 
 
     brief = dict()
