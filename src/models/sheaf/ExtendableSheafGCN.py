@@ -353,8 +353,8 @@ class ExtendableSheafGCN(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.001)
 
-    def encode_minibatch(self, users, pos_items, neg_items, edge_index):
-        out, diff_loss, cons_loss, orth_loss = self.forward_(edge_index)
+    def encode_minibatch(self, users, pos_items, neg_items, adj_matrix):
+        out, diff_loss, cons_loss, orth_loss = self.forward_(adj_matrix)
 
         return (
             out,
