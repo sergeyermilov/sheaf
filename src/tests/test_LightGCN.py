@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import torch
 
-from src.models.LightGCN import LightGCNConv
+from src.models.graph.LightGCN import LightGCNConv
 
 
 class TestLightGCNConv(TestCase):
