@@ -118,6 +118,7 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
     def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], nsmat: int = 64):
         super(SingleEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
 
+        # maybe create two selarate FFNs for user and item nodes?
         self.fc_smat = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
 
     def compute(self,
@@ -138,12 +139,13 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
 
 
 class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], nsmat: int = 64):
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], nsmat: int = 32):
         super(PairedEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
 
         self.dimx = dimx
         self.dimy = dimy
 
+        # maybe create two selarate FFNs for user and item nodes?
         self.fc_smat = make_fc_transform(self.dimx * 2, (self.dimx, self.dimy), nsmat)
 
     def compute(self,
@@ -179,6 +181,37 @@ class ExtendableSheafGCNLayer(nn.Module):
 
         self.orth_eye = torch.eye(self.dimy).unsqueeze(0)
 
+    def compute_h_v(self, A_u_v, A_v_u, embeddings_v):
+        #########################################
+        ## compute h_v = A(u,v)^T * A(v,u) * x(v)
+        #########################################
+        # compute A(u,v)^T
+        A_uv_t = torch.reshape(A_u_v, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
+        # compute A(v,u) * x(v)
+        h_v_ = torch.bmm(A_v_u, embeddings_v.unsqueeze(-1)).squeeze(-1)
+        # compute h_v = A(u,v)^T * A(v,u) * x(v)
+        h_v = torch.bmm(A_uv_t, h_v_.unsqueeze(-1)).squeeze(-1)
+        #########################################
+
+        return h_v, A_uv_t
+
+    # TODO: VERIFY CORRECTNESS
+    def compute_c_v(self, adj_matrix, u_indices, v_indices, h_v):
+        ############################
+        # compute c_v = w(v,u) * h_v
+        ############################
+        # extract w(v, u)
+        embedding_weights = adj_matrix[v_indices, u_indices]
+        # c_v = w(v, u) * h_v
+        return embedding_weights.view(-1, 1) * h_v
+
+    def compute_m_u(self, embeddings, u_indices, c_v):
+        # compute  sum_v
+        m_u = torch.zeros_like(embeddings)
+        indx = u_indices.view(-1, 1).repeat(1, embeddings.shape[1])
+        # sum c_v for each u
+        return torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
+
     def forward(self, adj_matrix, embeddings, edge_index, compute_losses: bool = False):
         u_indices = edge_index[0, :]
         v_indices = edge_index[1, :]
@@ -191,26 +224,20 @@ class ExtendableSheafGCNLayer(nn.Module):
         for operator_compute_layer in self.operator_compute_layers:
             sheaf_operators = operator_compute_layer(sheaf_operators, embeddings, u_indices, v_indices)
 
-        smat_uv = sheaf_operators.operator_uv
-        smat_vu = sheaf_operators.operator_uv
+        A_uv = sheaf_operators.operator_uv
+        A_vu = sheaf_operators.operator_vu
 
         embeddings_u = embeddings[u_indices, ...]
         embeddings_v = embeddings[v_indices, ...]
 
-        # compute h_v = A(u,v)^T A(v,u) * x(v)
-        smat_uv_t = torch.reshape(smat_uv, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
-        h_v_ = torch.bmm(smat_vu, embeddings_v.unsqueeze(-1)).squeeze(-1)
-        h_v = torch.bmm(smat_uv_t, h_v_.unsqueeze(-1)).squeeze(-1)
+        ## compute h_v = A(u,v)^T * A(v,u) * x(v) and A(u, v)^T
+        h_v, A_uv_t = self.compute_h_v(A_u_v=A_uv, A_v_u=A_vu, embeddings_v=embeddings_v)
 
-        # compute c_v = w*(v,u) * h_v
-        embedding_weights = adj_matrix[edge_index[0, :], edge_index[1, :]]
-        c_v = embedding_weights.view(-1, 1) * h_v
+        # compute c_v = w(v,u) * h_v
+        c_v = self.compute_c_v(adj_matrix=adj_matrix, u_indices=u_indices, v_indices=v_indices, h_v=h_v)
 
-        # compute  sum_v
-        m_u = torch.zeros_like(embeddings)
-        indx = u_indices.view(-1, 1).repeat(1, embeddings.shape[1])
-        # sum c_v for each u
-        m_u = torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
+        # compute message passing
+        m_u = self.compute_m_u(embeddings=embeddings, u_indices=u_indices, c_v=c_v)
 
         if not compute_losses:
             return m_u
@@ -222,9 +249,9 @@ class ExtendableSheafGCNLayer(nn.Module):
 
         # compute intermediate values for loss cons
         # P(u, v) = A(u, v)^T A(u, v)
-        cons_p = torch.bmm(smat_uv_t, smat_uv)
+        cons_p = torch.bmm(A_uv_t, A_uv)
         # A(u, v) - A(u, v) P(u, v)
-        cons_y = smat_uv - torch.bmm(smat_uv, cons_p)
+        cons_y = A_uv - torch.bmm(A_uv, cons_p)
         # Q(u, v) = (A(u, v) - A(u, v) P(u, v))^T (A(u, v) - A(u, v) P(u, v))
         cons_q = torch.bmm(cons_y.swapaxes(-1, -2), cons_y)
         # W(u, v) = x(u)^T Q(u, v) x(u)
@@ -233,7 +260,7 @@ class ExtendableSheafGCNLayer(nn.Module):
         cons_loss = cons_w2.mean()
 
         # compute intermediate values for loss orth
-        orth_aat = torch.bmm(smat_uv, smat_uv_t)
+        orth_aat = torch.bmm(A_uv, A_uv_t)
         orth_q = orth_aat - self.orth_eye
         orth_z = torch.bmm(orth_q.swapaxes(-1, -2), orth_q)
 

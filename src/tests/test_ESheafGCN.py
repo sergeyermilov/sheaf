@@ -3,7 +3,7 @@ from unittest import TestCase
 
 from torch_geometric.utils import to_torch_csc_tensor, to_dense_adj
 
-from src.models.ESheafGCN import Sheaf_Conv_fixed
+from src.models.sheaf.ESheafGCN import ESheafLayer
 
 
 class TestSheaf_NNet(TestCase):
@@ -19,7 +19,7 @@ class TestSheaf_NNet(TestCase):
 
         adj_matrix_sparse = torch.squeeze(to_dense_adj(edge_index))
 
-        conv = Sheaf_Conv_fixed(2, 6, 6)
+        conv = ESheafLayer(2, 6, 6)
         a1, a2, rmat = conv.forward(adj_matrix_sparse, x)
         print(rmat)
 
