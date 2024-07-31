@@ -11,6 +11,7 @@ for SEED in {1..10}; do
   python -m src.train --model ESheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':['orth','cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model ESheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':['orth']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model ESheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':['cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model ESheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':[]}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 done
 
 if [ ! -d "$ARTIFACT_DIR" ]; then
