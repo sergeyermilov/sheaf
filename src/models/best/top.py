@@ -4,7 +4,6 @@ from torch.nn.modules.module import T
 
 class TopKPopularity(pl.LightningModule):
     def __init__(self,
-                 latent_dim,
                  dataset):
         super(TopKPopularity, self).__init__()
         self.dataset = dataset

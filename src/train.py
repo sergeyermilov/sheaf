@@ -3,6 +3,7 @@ import json
 import click
 import torch
 import pathlib
+import datetime
 
 from pytorch_lightning import Trainer
 
@@ -68,6 +69,7 @@ def main(model, dataset, split, params, dataset_dir, batch_size, epochs, device,
     print("-----------------------------------------------")
     print("Running model with the following configuration:")
     print("-----------------------------------------------")
+    print(f"date= {datetime.datetime.now()}")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
     print(f"params = {params}")

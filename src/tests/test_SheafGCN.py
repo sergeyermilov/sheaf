@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import torch
 
-from src.models.SheafGCN import SheafConvLayer
+from src.models.sheaf.SheafGCN import SheafConvLayer
 
 
 class TestSheafConvLayer(TestCase):
