@@ -4,6 +4,7 @@ import click
 import json
 import pickle
 import pathlib
+import datetime
 import itertools
 
 import numpy as np
@@ -111,6 +112,7 @@ def main(device, artifact_id, artifact_dir):
     print("------------------------------------------------")
     print("Evaluate model with the following configuration:")
     print("------------------------------------------------")
+    print(f"date= {datetime.datetime.now()}")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
     print(f"params = {params}")
