@@ -4,6 +4,7 @@ import click
 import json
 import pickle
 import pathlib
+import datetime
 import itertools
 
 import numpy as np
@@ -111,6 +112,7 @@ def main(device, artifact_id, artifact_dir):
     print("------------------------------------------------")
     print("Evaluate model with the following configuration:")
     print("------------------------------------------------")
+    print(f"date= {datetime.datetime.now()}")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
     print(f"params = {params}")
@@ -164,7 +166,7 @@ def main(device, artifact_id, artifact_dir):
     res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
     res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
 
-    res.to_csv(report_dir.joinpath(f"report.csv"), index=False)
+    res.to_csv(artifact_dir.joinpath(f"report.csv"), index=False)
 
 
     brief = dict()
