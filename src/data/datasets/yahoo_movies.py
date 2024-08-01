@@ -55,7 +55,7 @@ class YahooMoviesDataset(Dataset):
                 return neg_id
 
 class YahooMoviesDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='\t', batch_size=32, random_state=42, split="simple"):
+    def __init__(self, dataset_path: str, sep='\t', batch_size=32, random_state=42, split="simple"):
         super().__init__()
         if split != "simple":
             raise NotImplementedError("Only simple split is available.")
@@ -63,7 +63,7 @@ class YahooMoviesDataModule(LightningDataModule):
         self.batch_size = batch_size
 
         COLUMNS_NAME = ['user_id', 'item_id', 'full_rating', "rating"]
-        self.pandas_data = pd.read_csv(ratings_file, sep=sep, names=COLUMNS_NAME, engine='python')
+        self.pandas_data = pd.read_csv(dataset_path, sep=sep, names=COLUMNS_NAME, engine='python')
         self.pandas_data = self.pandas_data[self.pandas_data['rating'] >= 3]
 
         # Train/val/test splitting
