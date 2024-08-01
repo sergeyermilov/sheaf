@@ -49,19 +49,21 @@ DATASETS = {
 @click.option("--dataset", default="FACEBOOK", type=str)
 @click.option("--split", default="simple", type=click.Choice(['time', 'simple']))
 @click.option("--params", default="{}", type=str)
+@click.option("--seed", default=42, type=int)
 @click.option("--dataset-dir", default="data/", type=pathlib.Path)
 @click.option("--batch-size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
-def main(model, dataset, split, params, dataset_dir, batch_size, epochs, device, artifact_dir):
+def main(model, dataset, split, params, seed, dataset_dir, batch_size, epochs, device, artifact_dir):
     artifact_params = dict(
         model=model,
         dataset=dataset,
         split=split,
         epochs=epochs,
         batch_size=batch_size,
-        params=params
+        params=params,
+        seed=seed,
     )
 
     artifact_id = compute_artifact_id(length=12, **artifact_params)
@@ -75,6 +77,7 @@ def main(model, dataset, split, params, dataset_dir, batch_size, epochs, device,
     print(f"params = {params}")
     print(f"split = {split}")
     print(f"dataset_dir = {dataset_dir}")
+    print(f"seed = {seed}")
     print(f"batch_size = {batch_size}")
     print(f"epochs = {epochs}")
     print(f"device = {device}")
@@ -98,7 +101,7 @@ def main(model, dataset, split, params, dataset_dir, batch_size, epochs, device,
     dataset_class, dataset_path = DATASETS[dataset]
 
     dataset_path = str(dataset_dir.joinpath(dataset_path))
-    ml_data_module = dataset_class(dataset_path, batch_size=batch_size)
+    ml_data_module = dataset_class(dataset_path, batch_size=batch_size, random_state=seed)
     ml_data_module.setup()
 
     serialize_dataset(artifact_dir.joinpath(f"data.pickle"), ml_data_module)
