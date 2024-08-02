@@ -70,7 +70,7 @@ class FastESheafGCN(pl.LightningModule):
 
     def training_step(self, batch):
         users, pos_items, neg_items = batch
-        edge_index, edge_mask = dropout_edge(self.train_edge_index)
+        edge_index, edge_mask = dropout_edge(self.train_edge_index, p=0.1)
         emb0, embs, users_emb, pos_emb, neg_emb = self.encode_minibatch(users,
                                                                         pos_items,
                                                                         neg_items,
