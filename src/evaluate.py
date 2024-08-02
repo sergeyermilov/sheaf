@@ -14,6 +14,7 @@ from tqdm import tqdm
 from src.models.best.ease import EASE
 from src.models.best.top import TopKPopularity
 from src.models.sheaf.ExtendableSheafGCN import ExtendableSheafGCN
+from src.models.sheaf.FastESheafGCN import FastESheafGCN
 from src.models.sheaf.SheafGCN import SheafGCN
 from src.models.sheaf.ESheafGCN import ESheafGCN
 
@@ -27,6 +28,7 @@ MODELS = {
     "SheafGCN": SheafGCN,
     # other models
     "LightGCN": LightGCN,
+    "FastESheafGCN": FastESheafGCN,
     "GAT": GAT,
     "TopKPopularity": TopKPopularity,
     "EASE": EASE
@@ -157,7 +159,7 @@ def main(device, artifact_id, artifact_dir):
 
     if not is_alternate_evaluation:
         with torch.no_grad():
-            _, embeddings = model_instance(train_dataset.adjacency_matrix.to(device))
+            _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
             user_embeddings, item_embeddings = torch.split(embeddings,
                                                            (train_dataset.num_users, train_dataset.num_items))
 

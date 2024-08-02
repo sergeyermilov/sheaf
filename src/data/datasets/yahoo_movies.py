@@ -8,6 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
 from torch_geometric.utils import to_dense_adj
 
+from src.data.utils import convert_edge_index_to_adjacency_map
+
 YAHOO_DATASET_RELATIVE_PATH = "yahoo/ydata-ymovies-user-movie-ratings-train-v1_0.txt"
 
 
@@ -35,7 +37,8 @@ class YahooMoviesDataset(Dataset):
             torch.cat([i_t, u_t])
         ))
 
-        self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
+        # self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
+        self.adjacency_map = convert_edge_index_to_adjacency_map(self.train_edge_index)
 
     def __len__(self):
         return self.pandas_data.shape[0]
