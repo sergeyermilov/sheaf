@@ -7,6 +7,7 @@ from src.models.sheaf.ExtendableSheafGCN import (
     GlobalOperatorComputeLayer,
     SingleEntityOperatorComputeLayer,
     PairedEntityOperatorComputeLayer,
+    ExtendableSheafGCNLayer,
 )
 
 
@@ -40,7 +41,7 @@ class TestExtendableSheafGCN(TestCase):
             [3, 1],
             [4, 1],
             [3, 2],
-        ], dtype=torch.int32)
+        ], dtype=torch.int64)
 
         self.embeddings = torch.tensor([
             [1, 0, 0, 0, 0],
@@ -48,7 +49,15 @@ class TestExtendableSheafGCN(TestCase):
             [0, 0, 1, 0, 0],
             [0, 0, 0, 1, 0],
             [0, 0, 0, 0, 1],
-        ], dtype=torch.int32)
+        ], dtype=torch.float32)
+
+        self.adj_matrix = torch.tensor([
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 2, 2],
+            [0, 0, 0, 3, 0],
+            [1, 2, 3, 0, 0],
+            [0, 2, 0, 0, 0],
+        ], dtype=torch.float32)
 
     def make_sheaf_operators(self):
         return SheafOperators(
@@ -148,3 +157,33 @@ class TestExtendableSheafGCN(TestCase):
         )
 
         self.assert_operators(sheaf_operators)
+
+    def test_compute_sheaf(self):
+        A_uv_t = torch.tensor([
+            [1, 2, 1],
+            [4, 0, 1],
+            [7, 8, 1]
+        ], dtype=torch.float32)
+
+        A_vu = A_uv_t.inverse().unsqueeze(0)
+        A_uv_t = A_uv_t.unsqueeze(0)
+        embeddings = torch.rand((3, 3))
+
+        result = ExtendableSheafGCNLayer.compute_sheaf(A_uv_t, A_vu, embeddings, [0, 1, 2])
+        # sheaf should be identity transformation
+        assert torch.allclose(embeddings, result), "Incorrect result"
+
+    def test_scale_sheaf(self):
+        # compute c_v = w(v,u) * h_v
+        embeddings = torch.ones((self.edge_index.shape[0], 3), dtype=torch.float32)
+        result = ExtendableSheafGCNLayer.scale_sheaf(self.adj_matrix, self.edge_index[:, 0], self.edge_index[:, 1], embeddings)
+        actual, _ = torch.max(result, dim=1)
+        expected = torch.tensor([1, 2, 2, 3, 1, 2, 2, 3], dtype=torch.float32)
+        assert torch.allclose(actual, expected), "Incorrect result"
+
+    def test_compute_message(self):
+        sheafs = torch.ones((self.edge_index.shape[0], self.embeddings.shape[1]), dtype=torch.float32)
+        messages = ExtendableSheafGCNLayer.compute_message(self.embeddings, self.edge_index[:, 0], sheafs)
+        actual, _ = torch.max(messages, dim=1)
+        expected = torch.tensor([1, 2, 1, 3, 1], dtype=torch.float32)
+        assert torch.allclose(actual, expected), "Incorrect result"
