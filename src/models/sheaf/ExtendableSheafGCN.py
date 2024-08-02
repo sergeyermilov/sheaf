@@ -181,36 +181,82 @@ class ExtendableSheafGCNLayer(nn.Module):
 
         self.orth_eye = torch.eye(self.dimy).unsqueeze(0)
 
-    def compute_h_v(self, A_u_v, A_v_u, embeddings_v):
+    @staticmethod
+    def compute_sheaf(A_uv_t, A_v_u, embeddings, indices) -> torch.Tensor:
         #########################################
         ## compute h_v = A(u,v)^T * A(v,u) * x(v)
         #########################################
-        # compute A(u,v)^T
-        A_uv_t = torch.reshape(A_u_v, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
+        x_v = embeddings[indices, ...]
         # compute A(v,u) * x(v)
-        h_v_ = torch.bmm(A_v_u, embeddings_v.unsqueeze(-1)).squeeze(-1)
+        h_v_ = torch.bmm(A_v_u, x_v.unsqueeze(0))
         # compute h_v = A(u,v)^T * A(v,u) * x(v)
-        h_v = torch.bmm(A_uv_t, h_v_.unsqueeze(-1)).squeeze(-1)
+        h_v = torch.bmm(A_uv_t, h_v_).squeeze(0)
         #########################################
 
-        return h_v, A_uv_t
+        return h_v
 
-    # TODO: VERIFY CORRECTNESS
-    def compute_c_v(self, adj_matrix, u_indices, v_indices, h_v):
+    @staticmethod
+    def scale_sheaf(adj_matrix, u_indices, v_indices, h_v) -> torch.Tensor:
         ############################
         # compute c_v = w(v,u) * h_v
         ############################
         # extract w(v, u)
         embedding_weights = adj_matrix[v_indices, u_indices]
         # c_v = w(v, u) * h_v
-        return embedding_weights.view(-1, 1) * h_v
+        c_v = embedding_weights.view(-1, 1) * h_v
+        #########################################
 
-    def compute_m_u(self, embeddings, u_indices, c_v):
+        return c_v
+
+    @staticmethod
+    def compute_message(embeddings, u_indices, sheafs):
+        ############################
         # compute  sum_v
+        ############################
         m_u = torch.zeros_like(embeddings)
         indx = u_indices.view(-1, 1).repeat(1, embeddings.shape[1])
         # sum c_v for each u
-        return torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
+        return torch.scatter_reduce(
+            input=m_u,
+            src=sheafs,
+            index=indx,
+            dim=0,
+            reduce="sum",
+            include_self=False
+        )
+
+    @staticmethod
+    def compute_diff_loss(messages, embeddings):
+        diff_x = (messages - embeddings).unsqueeze(0)
+        diff_w = torch.bmm(diff_x.swapaxes(-1, -2), diff_x)
+        return diff_w.mean()
+
+    @staticmethod
+    def compute_cons_loss(embeddings, u_indices, A_uv, A_uv_t):
+        embeddings_u = embeddings[u_indices, ...]
+        # P(u, v) = A(u, v)^T A(u, v)
+        cons_p = torch.bmm(A_uv_t, A_uv)
+        # A(u, v) - A(u, v) P(u, v)
+        cons_y = A_uv - torch.bmm(A_uv, cons_p)
+        # Q(u, v) = (A(u, v) - A(u, v) P(u, v))^T (A(u, v) - A(u, v) P(u, v))
+        cons_q = torch.bmm(cons_y.swapaxes(-1, -2), cons_y)
+        # W(u, v) = x(u)^T Q(u, v) x(u)
+        cons_w1 = torch.bmm(cons_q, embeddings_u.unsqueeze(-1))
+        cons_w2 = torch.bmm(embeddings_u.unsqueeze(-1).swapaxes(-1, -2), cons_w1)
+
+        return cons_w2.mean()
+
+    @staticmethod
+    def compute_orth_loss(A_uv, A_uv_t, orth_eye):
+        # compute intermediate values for loss orth
+        orth_aat = torch.bmm(A_uv, A_uv_t)
+        orth_q = orth_aat - orth_eye
+        orth_z = torch.bmm(orth_q.swapaxes(-1, -2), orth_q)
+
+        # compute trace
+        orth = torch.einsum("ijj", orth_z)
+
+        return torch.mean(orth)
 
     def forward(self, adj_matrix, embeddings, edge_index, compute_losses: bool = False):
         u_indices = edge_index[0, :]
@@ -227,46 +273,18 @@ class ExtendableSheafGCNLayer(nn.Module):
         A_uv = sheaf_operators.operator_uv
         A_vu = sheaf_operators.operator_vu
 
-        embeddings_u = embeddings[u_indices, ...]
-        embeddings_v = embeddings[v_indices, ...]
+        A_uv_t = torch.reshape(A_uv, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
 
-        ## compute h_v = A(u,v)^T * A(v,u) * x(v) and A(u, v)^T
-        h_v, A_uv_t = self.compute_h_v(A_u_v=A_uv, A_v_u=A_vu, embeddings_v=embeddings_v)
-
-        # compute c_v = w(v,u) * h_v
-        c_v = self.compute_c_v(adj_matrix=adj_matrix, u_indices=u_indices, v_indices=v_indices, h_v=h_v)
-
-        # compute message passing
-        m_u = self.compute_m_u(embeddings=embeddings, u_indices=u_indices, c_v=c_v)
+        h_v = ExtendableSheafGCNLayer.compute_sheaf(A_uv_t=A_uv_t, A_v_u=A_vu, embeddings=embeddings, indices=v_indices)
+        c_v = ExtendableSheafGCNLayer.scale_sheaf(adj_matrix=adj_matrix, u_indices=u_indices, v_indices=v_indices, h_v=h_v)
+        m_u = ExtendableSheafGCNLayer.compute_message(embeddings=embeddings, u_indices=u_indices, sheafs=c_v)
 
         if not compute_losses:
             return m_u
 
-        # compute intermediate values for loss diff
-        diff_x = (m_u - embeddings).unsqueeze(-1)
-        diff_w = torch.bmm(diff_x.swapaxes(-1, -2), diff_x)
-        diff_loss = diff_w.mean()
-
-        # compute intermediate values for loss cons
-        # P(u, v) = A(u, v)^T A(u, v)
-        cons_p = torch.bmm(A_uv_t, A_uv)
-        # A(u, v) - A(u, v) P(u, v)
-        cons_y = A_uv - torch.bmm(A_uv, cons_p)
-        # Q(u, v) = (A(u, v) - A(u, v) P(u, v))^T (A(u, v) - A(u, v) P(u, v))
-        cons_q = torch.bmm(cons_y.swapaxes(-1, -2), cons_y)
-        # W(u, v) = x(u)^T Q(u, v) x(u)
-        cons_w1 = torch.bmm(cons_q, embeddings_u.unsqueeze(-1))
-        cons_w2 = torch.bmm(embeddings_u.unsqueeze(-1).swapaxes(-1, -2), cons_w1)
-        cons_loss = cons_w2.mean()
-
-        # compute intermediate values for loss orth
-        orth_aat = torch.bmm(A_uv, A_uv_t)
-        orth_q = orth_aat - self.orth_eye
-        orth_z = torch.bmm(orth_q.swapaxes(-1, -2), orth_q)
-
-        # compute trace
-        orth = torch.einsum("ijj", orth_z)
-        orth_loss = torch.mean(orth)
+        diff_loss = ExtendableSheafGCNLayer.compute_diff_loss(messages=m_u, embeddings=embeddings)
+        cons_loss = ExtendableSheafGCNLayer.compute_cons_loss(embeddings=embeddings, u_indices=u_indices, A_uv=A_uv, A_uv_t=A_uv_t)
+        orth_loss = ExtendableSheafGCNLayer.compute_orth_loss(A_uv=A_uv, A_uv_t=A_uv_t, orth_eye=self.orth_eye)
 
         return m_u, diff_loss, cons_loss, orth_loss
 
