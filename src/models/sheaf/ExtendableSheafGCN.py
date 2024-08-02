@@ -12,6 +12,11 @@ to compute linear operator. A(u, v) = FFN(u, v) + FFN(u) + U for u and v vectors
 """
 
 
+class Losses:
+    ORTHOGONALITY = "orth"
+    CONSISTENCY = "cons"
+
+
 def make_fc_transform(inpt: int, outpt: tuple[int, int], nsmat: int):
     assert len(outpt) == 2, "incorrect output dim"
 
@@ -297,13 +302,24 @@ class ExtendableSheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset,
-                 layer_types: list[str]):
+                 layer_types: list[str] = None,
+                 losses: list[str] = None):
         super(ExtendableSheafGCN, self).__init__()
+
+        if layer_types is None:
+            layer_types = [OperatorComputeLayerType.LAYER_SINGLE_ENTITY]
+
+        if losses is None:
+            self.losses = {}
+        else:
+            self.losses = set(losses)
+
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
 
+        assert all([loss in {Losses.ORTHOGONALITY, Losses.CONSISTENCY} for loss in self.losses]), "unknown loss type"
         assert layer_types, "layers may not be empty"
 
         # every layer is the same
@@ -380,7 +396,13 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         w_diff, w_orth, w_cons, w_bpr = compute_loss_weights_simple(loss_diff, loss_orth, loss_cons, bpr_loss, 1024)
 
-        loss = w_diff * loss_diff + w_orth * loss_orth + w_cons * loss_cons + w_bpr * bpr_loss
+        loss = w_diff * loss_diff + w_bpr * bpr_loss  # + w_orth * loss_orth + w_cons * loss_cons
+
+        if Losses.CONSISTENCY in self.losses:
+            loss += w_cons * loss_cons
+
+        if Losses.ORTHOGONALITY in self.losses:
+            loss += w_orth * loss_orth
 
         self.log('bpr_loss', bpr_loss)
         self.log('loss_diff', loss_diff)
