@@ -188,9 +188,9 @@ class ExtendableSheafGCNLayer(nn.Module):
         #########################################
         x_v = embeddings[indices, ...]
         # compute A(v,u) * x(v)
-        h_v_ = torch.bmm(A_v_u, x_v.unsqueeze(0))
+        h_v_ = torch.bmm(A_v_u, x_v.unsqueeze(-1))
         # compute h_v = A(u,v)^T * A(v,u) * x(v)
-        h_v = torch.bmm(A_uv_t, h_v_).squeeze(0)
+        h_v = torch.bmm(A_uv_t, h_v_).squeeze(-1)
         #########################################
 
         return h_v

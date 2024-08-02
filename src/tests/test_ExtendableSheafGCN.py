@@ -167,9 +167,9 @@ class TestExtendableSheafGCN(TestCase):
 
         A_vu = A_uv_t.inverse().unsqueeze(0)
         A_uv_t = A_uv_t.unsqueeze(0)
-        embeddings = torch.rand((3, 3))
+        embeddings = torch.rand((1, 3))
 
-        result = ExtendableSheafGCNLayer.compute_sheaf(A_uv_t, A_vu, embeddings, [0, 1, 2])
+        result = ExtendableSheafGCNLayer.compute_sheaf(A_uv_t, A_vu, embeddings, [0])
         # sheaf should be identity transformation
         assert torch.allclose(embeddings, result), "Incorrect result"
 
