@@ -187,3 +187,34 @@ class TestExtendableSheafGCN(TestCase):
         actual, _ = torch.max(messages, dim=1)
         expected = torch.tensor([1, 2, 1, 3, 1], dtype=torch.float32)
         assert torch.allclose(actual, expected), "Incorrect result"
+
+    def test_diff_loss(self):
+        gaus = torch.randn(6, 6)
+        svd = torch.linalg.svd(gaus)
+        orth = svd[0] @ svd[2]
+
+        messages = torch.clone(orth)
+        embeddings = torch.clone(orth)
+
+        embeddings[:, :] *= 2
+
+        actual = ExtendableSheafGCNLayer.compute_diff_loss(messages, embeddings)
+
+        assert torch.allclose(actual, torch.tensor(6./36)), "Incorrect result"
+
+    def test_cons_loss(self):
+        # computation is straight forward but test is not, maybe implement it in future
+        pass
+
+    def test_orth_loss(self):
+        gaus = torch.randn(6, 6)
+        svd = torch.linalg.svd(gaus)
+        orth = svd[0] @ svd[2]
+        eye = torch.eye(orth.shape[0])
+
+        A = orth.unsqueeze(0)
+        A_t = A.swapaxes(-1, -2)
+
+        actual = ExtendableSheafGCNLayer.compute_orth_loss(A, 2*A_t, eye)
+
+        assert torch.allclose(actual, torch.tensor(6.)), "Incorrect result"

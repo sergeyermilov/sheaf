@@ -232,13 +232,18 @@ class ExtendableSheafGCNLayer(nn.Module):
 
     @staticmethod
     def compute_diff_loss(messages, embeddings):
-        diff_x = (messages - embeddings).unsqueeze(0)
-        diff_w = torch.bmm(diff_x.swapaxes(-1, -2), diff_x)
+        diff_x = (messages - embeddings)
+        diff_x_t = diff_x.swapaxes(-1, -2)
+        diff_w = torch.mm(diff_x_t, diff_x)
+
         return diff_w.mean()
 
     @staticmethod
     def compute_cons_loss(embeddings, u_indices, A_uv, A_uv_t):
         embeddings_u = embeddings[u_indices, ...]
+        x = embeddings_u.unsqueeze(-1)
+        x_t = embeddings_u.unsqueeze(-1).swapaxes(-1, -2)
+
         # P(u, v) = A(u, v)^T A(u, v)
         cons_p = torch.bmm(A_uv_t, A_uv)
         # A(u, v) - A(u, v) P(u, v)
@@ -246,8 +251,8 @@ class ExtendableSheafGCNLayer(nn.Module):
         # Q(u, v) = (A(u, v) - A(u, v) P(u, v))^T (A(u, v) - A(u, v) P(u, v))
         cons_q = torch.bmm(cons_y.swapaxes(-1, -2), cons_y)
         # W(u, v) = x(u)^T Q(u, v) x(u)
-        cons_w1 = torch.bmm(cons_q, embeddings_u.unsqueeze(-1))
-        cons_w2 = torch.bmm(embeddings_u.unsqueeze(-1).swapaxes(-1, -2), cons_w1)
+        cons_w1 = torch.bmm(cons_q, x)
+        cons_w2 = torch.bmm(x_t, cons_w1)
 
         return cons_w2.mean()
 
@@ -314,13 +319,13 @@ class ExtendableSheafGCN(pl.LightningModule):
         else:
             self.losses = set(losses)
 
+        assert all([loss in {Losses.ORTHOGONALITY, Losses.CONSISTENCY} for loss in self.losses]), "unknown loss type"
+        assert layer_types, "layers may not be empty"
+
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
-
-        assert all([loss in {Losses.ORTHOGONALITY, Losses.CONSISTENCY} for loss in self.losses]), "unknown loss type"
-        assert layer_types, "layers may not be empty"
 
         # every layer is the same
         self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
@@ -328,15 +333,16 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.sheaf_conv3 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
 
         self.edge_index = self.dataset.train_edge_index
-        self.adj = self.dataset.adjacency_matrix
-        degree = self.adj.sum(dim=1)
+        self.adj = ExtendableSheafGCN.compute_adj_normalized(self.dataset.adjacency_matrix)
+        self.init_parameters()
+
+    @staticmethod
+    def compute_adj_normalized(adjacency_matrix):
+        degree = adjacency_matrix.sum(dim=1)
         degree_inv_sqrt = torch.pow(degree, -0.5)
         degree_inv_sqrt[torch.isinf(degree_inv_sqrt)] = 0
         diag_degree_inv_sqrt = torch.diag(degree_inv_sqrt)
-        self.normalized_adj = diag_degree_inv_sqrt @ self.adj @ diag_degree_inv_sqrt
-        self.adj = self.normalized_adj
-        self.train_edge_index = self.dataset.train_edge_index
-        self.init_parameters()
+        return diag_degree_inv_sqrt @ adjacency_matrix @ diag_degree_inv_sqrt
 
     def create_operator_layers(self, layer_types: list[str]):
         layers = list()
