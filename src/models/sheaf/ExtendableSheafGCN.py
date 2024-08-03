@@ -16,6 +16,15 @@ class Losses:
     ORTHOGONALITY = "orth"
     CONSISTENCY = "cons"
 
+class OperatorComputeLayerType:
+    LAYER_GLOBAL = "global"
+    LAYER_SINGLE_ENTITY = "single"
+    LAYER_PAIRED_ENTITIES = "paired"
+
+class LayerCompositionType:
+    MULTIPLICATIVE = "mult"
+    ADDITIVE = "add"
+
 
 def make_fc_transform(inpt: int, outpt: tuple[int, int], nsmat: int):
     assert len(outpt) == 2, "incorrect output dim"
@@ -39,12 +48,6 @@ def make_fc_transform(inpt: int, outpt: tuple[int, int], nsmat: int):
     )
 
 
-class OperatorComputeLayerType:
-    LAYER_GLOBAL = "global"
-    LAYER_SINGLE_ENTITY = "single"
-    LAYER_PAIRED_ENTITIES = "paired"
-
-
 @dataclasses.dataclass
 class SheafOperators:
     operator_uv: torch.Tensor  # A(u, v)
@@ -52,11 +55,15 @@ class SheafOperators:
 
 
 class OperatorComputeLayer(nn.Module):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int]):
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str):
         super(OperatorComputeLayer, self).__init__()
+
+        assert composition_type in {LayerCompositionType.ADDITIVE, LayerCompositionType.MULTIPLICATIVE}, "incorrect composition type"
 
         self.dimx = dimx
         self.dimy = dimy
+
+        self.composition_type = composition_type
 
         self.user_indices = torch.tensor(user_indices)
         self.item_indices = torch.tensor(item_indices)
@@ -90,6 +97,9 @@ class OperatorComputeLayer(nn.Module):
     def init_parameters(self):
         raise NotImplementedError()
 
+    def priority(self):
+        raise NotImplementedError()
+
     @staticmethod
     def init_layer(layer):
         if layer is nn.Linear:
@@ -97,8 +107,8 @@ class OperatorComputeLayer(nn.Module):
 
 
 class GlobalOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int]):
-        super(GlobalOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str):
+        super(GlobalOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         self.user_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
         self.item_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
@@ -108,11 +118,15 @@ class GlobalOperatorComputeLayer(OperatorComputeLayer):
                 embeddings: torch.Tensor,
                 u_indices: torch.Tensor,
                 v_indices: torch.Tensor) -> SheafOperators:
+        # it is always additive becausse this layer is the first layer in composition
         operators.operator_uv[torch.isin(u_indices, self.user_indices), ...] += self.user_operator
         operators.operator_uv[torch.isin(u_indices, self.item_indices), ...] += self.item_operator
         operators.operator_vu[torch.isin(v_indices, self.user_indices), ...] += self.user_operator
         operators.operator_vu[torch.isin(v_indices, self.item_indices), ...] += self.item_operator
         return operators
+
+    def priority(self):
+        return 1
 
     def init_parameters(self):
         nn.init.xavier_uniform(self.user_operator.data)
@@ -120,8 +134,8 @@ class GlobalOperatorComputeLayer(OperatorComputeLayer):
 
 
 class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], nsmat: int = 64):
-        super(SingleEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64):
+        super(SingleEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         # maybe create two selarate FFNs for user and item nodes?
         self.fc_smat = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
@@ -134,18 +148,25 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
 
         operator_by_embedding = torch.reshape(self.fc_smat(embeddings), (-1, self.dimy, self.dimx))
 
-        operators.operator_uv += operator_by_embedding[u_indices, ...]
-        operators.operator_vu += operator_by_embedding[v_indices, ...]
+        if self.composition_type == LayerCompositionType.ADDITIVE:
+            operators.operator_uv += operator_by_embedding[u_indices, ...]
+            operators.operator_vu += operator_by_embedding[v_indices, ...]
+        else:
+            operators.operator_uv = torch.bmm(operators.operator_uv, operator_by_embedding[u_indices, ...])
+            operators.operator_vu = torch.bmm(operators.operator_vu, operator_by_embedding[v_indices, ...])
 
         return operators
+
+    def priority(self):
+        return 2
 
     def init_parameters(self):
         self.fc_smat.apply(OperatorComputeLayer.init_layer)
 
 
 class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], nsmat: int = 32):
-        super(PairedEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 32):
+        super(PairedEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         self.dimx = dimx
         self.dimy = dimy
@@ -168,10 +189,17 @@ class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
         operator_uv = torch.reshape(self.fc_smat(combined_embeddings_uv), (-1, self.dimy, self.dimx))
         operator_vu = torch.reshape(self.fc_smat(combined_embeddings_vu), (-1, self.dimy, self.dimx))
 
-        operators.operator_uv += operator_uv
-        operators.operator_vu += operator_vu
+        if self.composition_type == LayerCompositionType.ADDITIVE:
+            operators.operator_uv += operator_uv
+            operators.operator_vu += operator_vu
+        else:
+            operators.operator_uv = torch.bmm(operators.operator_uv, operator_uv)
+            operators.operator_vu = torch.bmm(operators.operator_vu, operator_vu)
 
         return operators
+
+    def priority(self):
+        return 3
 
     def init_parameters(self):
         self.fc_smat.apply(OperatorComputeLayer.init_layer)
@@ -277,7 +305,7 @@ class ExtendableSheafGCNLayer(nn.Module):
             torch.zeros((edge_index.shape[1], self.dimy, self.dimx), requires_grad=False)
         )
 
-        for operator_compute_layer in self.operator_compute_layers:
+        for operator_compute_layer in sorted(self.operator_compute_layers, key=lambda x: x.priority()):
             sheaf_operators = operator_compute_layer(sheaf_operators, embeddings, u_indices, v_indices)
 
         A_uv = sheaf_operators.operator_uv
@@ -308,7 +336,8 @@ class ExtendableSheafGCN(pl.LightningModule):
                  latent_dim,
                  dataset,
                  layer_types: list[str] = None,
-                 losses: list[str] = None):
+                 losses: list[str] = None,
+                 composition_type: str = LayerCompositionType.ADDITIVE):
         super(ExtendableSheafGCN, self).__init__()
 
         if layer_types is None:
@@ -326,6 +355,7 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
+        self.composition_type = composition_type
 
         # every layer is the same
         self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
@@ -352,6 +382,7 @@ class ExtendableSheafGCN(pl.LightningModule):
             "dimy": self.latent_dim,
             "user_indices": list(range(self.dataset.num_users)),
             "item_indices": list(range(self.dataset.num_users, self.dataset.num_users + self.dataset.num_items)),
+            "composition_type": self.composition_type,
         }
 
         def make_layer(layer_type: str):

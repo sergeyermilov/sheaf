@@ -7,7 +7,7 @@ from src.models.sheaf.ExtendableSheafGCN import (
     GlobalOperatorComputeLayer,
     SingleEntityOperatorComputeLayer,
     PairedEntityOperatorComputeLayer,
-    ExtendableSheafGCNLayer,
+    ExtendableSheafGCNLayer, LayerCompositionType,
 )
 
 
@@ -81,7 +81,8 @@ class TestExtendableSheafGCN(TestCase):
             dimx=self.dimx,
             dimy=self.dimy,
             user_indices=self.user_indices,
-            item_indices=self.item_indices
+            item_indices=self.item_indices,
+            composition_type=LayerCompositionType.ADDITIVE
         )
 
         global_layer.user_operator.data.fill_(1.0)
@@ -114,7 +115,8 @@ class TestExtendableSheafGCN(TestCase):
             dimx=self.dimx,
             dimy=self.dimy,
             user_indices=self.user_indices,
-            item_indices=self.item_indices
+            item_indices=self.item_indices,
+            composition_type=LayerCompositionType.ADDITIVE
         )
         single_layer.fc_smat = LambdaModule(compute_matrix)
 
@@ -145,7 +147,8 @@ class TestExtendableSheafGCN(TestCase):
             dimx=self.dimx,
             dimy=self.dimy,
             user_indices=self.user_indices,
-            item_indices=self.item_indices
+            item_indices=self.item_indices,
+            composition_type=LayerCompositionType.ADDITIVE
         )
         paired_layer.fc_smat = LambdaModule(compute_matrix)
 
@@ -157,6 +160,37 @@ class TestExtendableSheafGCN(TestCase):
         )
 
         self.assert_operators(sheaf_operators)
+
+    def test_layer_ordering(self):
+        global_layer = GlobalOperatorComputeLayer(
+            dimx=self.dimx,
+            dimy=self.dimy,
+            user_indices=self.user_indices,
+            item_indices=self.item_indices,
+            composition_type=LayerCompositionType.ADDITIVE
+        )
+
+        paired_layer = PairedEntityOperatorComputeLayer(
+            dimx=self.dimx,
+            dimy=self.dimy,
+            user_indices=self.user_indices,
+            item_indices=self.item_indices,
+            composition_type=LayerCompositionType.ADDITIVE
+        )
+
+        single_layer = SingleEntityOperatorComputeLayer(
+            dimx=self.dimx,
+            dimy=self.dimy,
+            user_indices=self.user_indices,
+            item_indices=self.item_indices,
+            composition_type=LayerCompositionType.ADDITIVE
+        )
+
+        sorted_layers = sorted([global_layer, single_layer, paired_layer], key=lambda layer: layer.priority())
+
+        assert sorted_layers[0] == global_layer, "incorrect ordering"
+        assert sorted_layers[1] == single_layer, "incorrect ordering"
+        assert sorted_layers[2] == paired_layer, "incorrect ordering"
 
     def test_compute_sheaf(self):
         A_uv_t = torch.tensor([
