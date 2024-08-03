@@ -152,8 +152,8 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
             operators.operator_uv += operator_by_embedding[u_indices, ...]
             operators.operator_vu += operator_by_embedding[v_indices, ...]
         else:
-            operators.operator_uv = torch.bmm(operators.operator_uv, operator_by_embedding[u_indices, ...])
-            operators.operator_vu = torch.bmm(operators.operator_vu, operator_by_embedding[v_indices, ...])
+            operators.operator_uv = torch.bmm(operator_by_embedding[u_indices, ...], operators.operator_uv)
+            operators.operator_vu = torch.bmm(operator_by_embedding[v_indices, ...], operators.operator_vu)
 
         return operators
 
@@ -193,8 +193,8 @@ class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
             operators.operator_uv += operator_uv
             operators.operator_vu += operator_vu
         else:
-            operators.operator_uv = torch.bmm(operators.operator_uv, operator_uv)
-            operators.operator_vu = torch.bmm(operators.operator_vu, operator_vu)
+            operators.operator_uv = torch.bmm(operator_uv, operators.operator_uv)
+            operators.operator_vu = torch.bmm(operator_vu, operators.operator_vu)
 
         return operators
 
