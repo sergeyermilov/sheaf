@@ -20,8 +20,8 @@ class TestSheaf_NNet(TestCase):
         adj_matrix_sparse = torch.squeeze(to_dense_adj(edge_index))
 
         conv = ESheafLayer(2, 6, 6)
-        a1, a2, rmat = conv.forward(adj_matrix_sparse, x)
-        print(rmat)
+        product = conv.forward(adj_matrix_sparse, x)
+        print(product)
 
     def test_2(self):
 
