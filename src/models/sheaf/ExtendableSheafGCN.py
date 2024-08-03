@@ -3,6 +3,7 @@ import dataclasses
 import torch
 import pytorch_lightning as pl
 from torch import nn
+from torch_geometric.utils import dropout_edge
 
 from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
 
@@ -337,14 +338,15 @@ class ExtendableSheafGCN(pl.LightningModule):
                  dataset,
                  layer_types: list[str] = None,
                  losses: list[str] = None,
-                 composition_type: str = LayerCompositionType.ADDITIVE):
+                 composition_type: str = LayerCompositionType.ADDITIVE,
+                 sample_share: float = 1.0):
         super(ExtendableSheafGCN, self).__init__()
 
         if layer_types is None:
             layer_types = [OperatorComputeLayerType.LAYER_SINGLE_ENTITY]
 
         if losses is None:
-            self.losses = {}
+            self.losses = {Losses.ORTHOGONALITY, Losses.CONSISTENCY}
         else:
             self.losses = set(losses)
 
@@ -356,6 +358,7 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
         self.composition_type = composition_type
+        self.sample_share = sample_share
 
         # every layer is the same
         self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
@@ -409,31 +412,37 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.sheaf_conv2.init_parameters()
         self.sheaf_conv3.init_parameters()
 
-    def forward_(self, adj_matrix):
+    def forward_(self, edge_index):
         emb0 = self.embedding.weight
-        m_u0, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(adj_matrix, emb0, self.edge_index, True)
-        m_u1 = self.sheaf_conv2(adj_matrix, m_u0, self.edge_index)
-        out = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
+        m_u0, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(self.adj, emb0, edge_index, True)
+        m_u1 = self.sheaf_conv2(self.adj, m_u0, edge_index)
+        out = self.sheaf_conv3(self.adj, m_u1, edge_index)
 
         return out, diff_loss, cons_loss, orth_loss
 
-    def forward(self, adj_matrix):
+    def forward(self, edge_index):
         emb0 = self.embedding.weight
-        m_u0 = self.sheaf_conv1(adj_matrix, emb0, self.edge_index)
-        m_u1 = self.sheaf_conv2(adj_matrix, m_u0, self.edge_index)
-        out = self.sheaf_conv3(adj_matrix, m_u1, self.edge_index)
+        m_u0 = self.sheaf_conv1(self.adj, emb0, edge_index)
+        m_u1 = self.sheaf_conv2(self.adj, m_u0, edge_index)
+        out = self.sheaf_conv3(self.adj, m_u1, edge_index)
 
         return emb0, out
 
     def training_step(self, batch, batch_idx):
         users, pos_items, neg_items = batch
-        embs, users_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(users, pos_items,
-                                                                                                   neg_items, self.adj)
-        bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
+        if self.sample_share == 1.0:
+            edge_index = self.edge_index
+        else:
+            edge_index, _ = dropout_edge(
+                self.edge_index,
+                p=self.sample_share
+            )
 
+        embs, users_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(users, pos_items, neg_items, edge_index)
+        bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
         w_diff, w_orth, w_cons, w_bpr = compute_loss_weights_simple(loss_diff, loss_orth, loss_cons, bpr_loss, 1024)
 
-        loss = w_diff * loss_diff + w_bpr * bpr_loss  # + w_orth * loss_orth + w_cons * loss_cons
+        loss = w_diff * loss_diff + w_bpr * bpr_loss
 
         if Losses.CONSISTENCY in self.losses:
             loss += w_cons * loss_cons
@@ -457,8 +466,8 @@ class ExtendableSheafGCN(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.001)
 
-    def encode_minibatch(self, users, pos_items, neg_items, adj_matrix):
-        out, diff_loss, cons_loss, orth_loss = self.forward_(adj_matrix)
+    def encode_minibatch(self, users, pos_items, neg_items, edge_index):
+        out, diff_loss, cons_loss, orth_loss = self.forward_(edge_index)
 
         return (
             out,
