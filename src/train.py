@@ -6,7 +6,7 @@ import pathlib
 import datetime
 
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 
 from src.models.best.ease import EASE
 from src.models.best.top import TopKPopularity
@@ -113,7 +113,10 @@ def main(model, dataset, split, params, seed, dataset_dir, batch_size, epochs, d
 
     model_class_partial = create_from_json_string(model_class, params)
     model_instance = model_class_partial(dataset=ml_data_module.train_dataset)
-    trainer = Trainer(max_epochs=epochs, log_every_n_steps=1, logger=CSVLogger(artifact_dir, name="train_logs"))
+    trainer = Trainer(max_epochs=epochs, log_every_n_steps=1, logger=[
+        CSVLogger(artifact_dir, name="train_logs"),
+        TensorBoardLogger(artifact_dir, name="train_tb")
+    ])
     trainer.fit(model_instance, train_dataloader)
     trainer.save_checkpoint(str(artifact_dir.joinpath(f"model.pickle")))
 
