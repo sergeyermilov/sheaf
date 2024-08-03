@@ -7,5 +7,4 @@ If you decided to install CPU-only version, usage of --device = cuda property wo
 ## Example of usage
 
 ```CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python -m src.train --model ExtendableSheafGCN --params "{'latent_dim':30,'layer_types':['single']}" --dataset FACEBOOK --device cpu```
-
 ```CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python -m src.evaluate --artifact_id c8098d8480aa --device cpu```
