@@ -14,6 +14,7 @@ from tqdm import tqdm
 from src.models.best.ease import EASE
 from src.models.best.top import TopKPopularity
 from src.models.sheaf.ExtendableSheafGCN import ExtendableSheafGCN
+from src.models.sheaf.FastESheafGCN import FastESheafGCN
 from src.models.sheaf.SheafGCN import SheafGCN
 from src.models.sheaf.ESheafGCN import ESheafGCN
 
@@ -27,6 +28,7 @@ MODELS = {
     "SheafGCN": SheafGCN,
     # other models
     "LightGCN": LightGCN,
+    "FastESheafGCN": FastESheafGCN,
     "GAT": GAT,
     "TopKPopularity": TopKPopularity,
     "EASE": EASE
@@ -78,7 +80,6 @@ def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_ev
     else:
         _df[reco_k] = _df.progress_apply(
             lambda x: evaluate(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k), axis=1)
-
 
     _df[intersected_k] = _df.apply(lambda x: list(set(x[f"reco_{k}"]).intersection(x["item_id_idx"])), axis=1)
 
@@ -157,7 +158,7 @@ def main(device, artifact_id, artifact_dir):
 
     if not is_alternate_evaluation:
         with torch.no_grad():
-            _, embeddings = model_instance(train_dataset.adjacency_matrix.to(device))
+            _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
             user_embeddings, item_embeddings = torch.split(embeddings,
                                                            (train_dataset.num_users, train_dataset.num_items))
 
