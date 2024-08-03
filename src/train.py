@@ -10,6 +10,7 @@ from pytorch_lightning.loggers import CSVLogger
 
 from src.models.best.ease import EASE
 from src.models.best.top import TopKPopularity
+from src.models.sheaf.FastESheafGCN import FastESheafGCN
 from src.utils import create_from_json_string
 from src.utils import serialize_dataset
 from src.utils import compute_artifact_id
@@ -29,6 +30,7 @@ MODELS = {
     # sheaf models
     "ExtendableSheafGCN": ExtendableSheafGCN,
     "ESheafGCN": ESheafGCN,
+    "FastESheafGCN": FastESheafGCN,
     "SheafGCN": SheafGCN,
     # graph models
     "LightGCN": LightGCN,
