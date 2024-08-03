@@ -12,6 +12,20 @@ to compute linear operator. A(u, v) = FFN(u, v) + FFN(u) + U for u and v vectors
 """
 
 
+class Losses:
+    ORTHOGONALITY = "orth"
+    CONSISTENCY = "cons"
+
+class OperatorComputeLayerType:
+    LAYER_GLOBAL = "global"
+    LAYER_SINGLE_ENTITY = "single"
+    LAYER_PAIRED_ENTITIES = "paired"
+
+class LayerCompositionType:
+    MULTIPLICATIVE = "mult"
+    ADDITIVE = "add"
+
+
 def make_fc_transform(inpt: int, outpt: tuple[int, int], nsmat: int):
     assert len(outpt) == 2, "incorrect output dim"
 
@@ -34,12 +48,6 @@ def make_fc_transform(inpt: int, outpt: tuple[int, int], nsmat: int):
     )
 
 
-class OperatorComputeLayerType:
-    LAYER_GLOBAL = "global"
-    LAYER_SINGLE_ENTITY = "single"
-    LAYER_PAIRED_ENTITIES = "paired"
-
-
 @dataclasses.dataclass
 class SheafOperators:
     operator_uv: torch.Tensor  # A(u, v)
@@ -47,11 +55,15 @@ class SheafOperators:
 
 
 class OperatorComputeLayer(nn.Module):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int]):
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str):
         super(OperatorComputeLayer, self).__init__()
+
+        assert composition_type in {LayerCompositionType.ADDITIVE, LayerCompositionType.MULTIPLICATIVE}, "incorrect composition type"
 
         self.dimx = dimx
         self.dimy = dimy
+
+        self.composition_type = composition_type
 
         self.user_indices = torch.tensor(user_indices)
         self.item_indices = torch.tensor(item_indices)
@@ -85,6 +97,9 @@ class OperatorComputeLayer(nn.Module):
     def init_parameters(self):
         raise NotImplementedError()
 
+    def priority(self):
+        raise NotImplementedError()
+
     @staticmethod
     def init_layer(layer):
         if layer is nn.Linear:
@@ -92,8 +107,8 @@ class OperatorComputeLayer(nn.Module):
 
 
 class GlobalOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int]):
-        super(GlobalOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str):
+        super(GlobalOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         self.user_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
         self.item_operator = nn.Parameter(torch.zeros((self.dimy, self.dimx)), requires_grad=True)
@@ -103,11 +118,15 @@ class GlobalOperatorComputeLayer(OperatorComputeLayer):
                 embeddings: torch.Tensor,
                 u_indices: torch.Tensor,
                 v_indices: torch.Tensor) -> SheafOperators:
+        # it is always additive becausse this layer is the first layer in composition
         operators.operator_uv[torch.isin(u_indices, self.user_indices), ...] += self.user_operator
         operators.operator_uv[torch.isin(u_indices, self.item_indices), ...] += self.item_operator
         operators.operator_vu[torch.isin(v_indices, self.user_indices), ...] += self.user_operator
         operators.operator_vu[torch.isin(v_indices, self.item_indices), ...] += self.item_operator
         return operators
+
+    def priority(self):
+        return 1
 
     def init_parameters(self):
         nn.init.xavier_uniform(self.user_operator.data)
@@ -115,8 +134,8 @@ class GlobalOperatorComputeLayer(OperatorComputeLayer):
 
 
 class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], nsmat: int = 64):
-        super(SingleEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64):
+        super(SingleEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         # maybe create two selarate FFNs for user and item nodes?
         self.fc_smat = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
@@ -129,18 +148,25 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
 
         operator_by_embedding = torch.reshape(self.fc_smat(embeddings), (-1, self.dimy, self.dimx))
 
-        operators.operator_uv += operator_by_embedding[u_indices, ...]
-        operators.operator_vu += operator_by_embedding[v_indices, ...]
+        if self.composition_type == LayerCompositionType.ADDITIVE:
+            operators.operator_uv += operator_by_embedding[u_indices, ...]
+            operators.operator_vu += operator_by_embedding[v_indices, ...]
+        else:
+            operators.operator_uv = torch.bmm(operator_by_embedding[u_indices, ...], operators.operator_uv)
+            operators.operator_vu = torch.bmm(operator_by_embedding[v_indices, ...], operators.operator_vu)
 
         return operators
+
+    def priority(self):
+        return 2
 
     def init_parameters(self):
         self.fc_smat.apply(OperatorComputeLayer.init_layer)
 
 
 class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], nsmat: int = 32):
-        super(PairedEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices)
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 32):
+        super(PairedEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         self.dimx = dimx
         self.dimy = dimy
@@ -163,10 +189,17 @@ class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
         operator_uv = torch.reshape(self.fc_smat(combined_embeddings_uv), (-1, self.dimy, self.dimx))
         operator_vu = torch.reshape(self.fc_smat(combined_embeddings_vu), (-1, self.dimy, self.dimx))
 
-        operators.operator_uv += operator_uv
-        operators.operator_vu += operator_vu
+        if self.composition_type == LayerCompositionType.ADDITIVE:
+            operators.operator_uv += operator_uv
+            operators.operator_vu += operator_vu
+        else:
+            operators.operator_uv = torch.bmm(operator_uv, operators.operator_uv)
+            operators.operator_vu = torch.bmm(operator_vu, operators.operator_vu)
 
         return operators
+
+    def priority(self):
+        return 3
 
     def init_parameters(self):
         self.fc_smat.apply(OperatorComputeLayer.init_layer)
@@ -181,36 +214,87 @@ class ExtendableSheafGCNLayer(nn.Module):
 
         self.orth_eye = torch.eye(self.dimy).unsqueeze(0)
 
-    def compute_h_v(self, A_u_v, A_v_u, embeddings_v):
+    @staticmethod
+    def compute_sheaf(A_uv_t, A_v_u, embeddings, indices) -> torch.Tensor:
         #########################################
         ## compute h_v = A(u,v)^T * A(v,u) * x(v)
         #########################################
-        # compute A(u,v)^T
-        A_uv_t = torch.reshape(A_u_v, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
+        x_v = embeddings[indices, ...]
         # compute A(v,u) * x(v)
-        h_v_ = torch.bmm(A_v_u, embeddings_v.unsqueeze(-1)).squeeze(-1)
+        h_v_ = torch.bmm(A_v_u, x_v.unsqueeze(-1))
         # compute h_v = A(u,v)^T * A(v,u) * x(v)
-        h_v = torch.bmm(A_uv_t, h_v_.unsqueeze(-1)).squeeze(-1)
+        h_v = torch.bmm(A_uv_t, h_v_).squeeze(-1)
         #########################################
 
-        return h_v, A_uv_t
+        return h_v
 
-    # TODO: VERIFY CORRECTNESS
-    def compute_c_v(self, adj_matrix, u_indices, v_indices, h_v):
+    @staticmethod
+    def scale_sheaf(adj_matrix, u_indices, v_indices, h_v) -> torch.Tensor:
         ############################
         # compute c_v = w(v,u) * h_v
         ############################
         # extract w(v, u)
         embedding_weights = adj_matrix[v_indices, u_indices]
         # c_v = w(v, u) * h_v
-        return embedding_weights.view(-1, 1) * h_v
+        c_v = embedding_weights.view(-1, 1) * h_v
+        #########################################
 
-    def compute_m_u(self, embeddings, u_indices, c_v):
+        return c_v
+
+    @staticmethod
+    def compute_message(embeddings, u_indices, sheafs):
+        ############################
         # compute  sum_v
+        ############################
         m_u = torch.zeros_like(embeddings)
         indx = u_indices.view(-1, 1).repeat(1, embeddings.shape[1])
         # sum c_v for each u
-        return torch.scatter_reduce(input=m_u, src=c_v, index=indx, dim=0, reduce="sum", include_self=False)
+        return torch.scatter_reduce(
+            input=m_u,
+            src=sheafs,
+            index=indx,
+            dim=0,
+            reduce="sum",
+            include_self=False
+        )
+
+    @staticmethod
+    def compute_diff_loss(messages, embeddings):
+        diff_x = (messages - embeddings)
+        diff_x_t = diff_x.swapaxes(-1, -2)
+        diff_w = torch.mm(diff_x_t, diff_x)
+
+        return diff_w.mean()
+
+    @staticmethod
+    def compute_cons_loss(embeddings, u_indices, A_uv, A_uv_t):
+        embeddings_u = embeddings[u_indices, ...]
+        x = embeddings_u.unsqueeze(-1)
+        x_t = embeddings_u.unsqueeze(-1).swapaxes(-1, -2)
+
+        # P(u, v) = A(u, v)^T A(u, v)
+        cons_p = torch.bmm(A_uv_t, A_uv)
+        # A(u, v) - A(u, v) P(u, v)
+        cons_y = A_uv - torch.bmm(A_uv, cons_p)
+        # Q(u, v) = (A(u, v) - A(u, v) P(u, v))^T (A(u, v) - A(u, v) P(u, v))
+        cons_q = torch.bmm(cons_y.swapaxes(-1, -2), cons_y)
+        # W(u, v) = x(u)^T Q(u, v) x(u)
+        cons_w1 = torch.bmm(cons_q, x)
+        cons_w2 = torch.bmm(x_t, cons_w1)
+
+        return cons_w2.mean()
+
+    @staticmethod
+    def compute_orth_loss(A_uv, A_uv_t, orth_eye):
+        # compute intermediate values for loss orth
+        orth_aat = torch.bmm(A_uv, A_uv_t)
+        orth_q = orth_aat - orth_eye
+        orth_z = torch.bmm(orth_q.swapaxes(-1, -2), orth_q)
+
+        # compute trace
+        orth = torch.einsum("ijj", orth_z)
+
+        return torch.mean(orth)
 
     def forward(self, adj_matrix, embeddings, edge_index, compute_losses: bool = False):
         u_indices = edge_index[0, :]
@@ -221,52 +305,24 @@ class ExtendableSheafGCNLayer(nn.Module):
             torch.zeros((edge_index.shape[1], self.dimy, self.dimx), requires_grad=False)
         )
 
-        for operator_compute_layer in self.operator_compute_layers:
+        for operator_compute_layer in sorted(self.operator_compute_layers, key=lambda x: x.priority()):
             sheaf_operators = operator_compute_layer(sheaf_operators, embeddings, u_indices, v_indices)
 
         A_uv = sheaf_operators.operator_uv
         A_vu = sheaf_operators.operator_vu
 
-        embeddings_u = embeddings[u_indices, ...]
-        embeddings_v = embeddings[v_indices, ...]
+        A_uv_t = torch.reshape(A_uv, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
 
-        ## compute h_v = A(u,v)^T * A(v,u) * x(v) and A(u, v)^T
-        h_v, A_uv_t = self.compute_h_v(A_u_v=A_uv, A_v_u=A_vu, embeddings_v=embeddings_v)
-
-        # compute c_v = w(v,u) * h_v
-        c_v = self.compute_c_v(adj_matrix=adj_matrix, u_indices=u_indices, v_indices=v_indices, h_v=h_v)
-
-        # compute message passing
-        m_u = self.compute_m_u(embeddings=embeddings, u_indices=u_indices, c_v=c_v)
+        h_v = ExtendableSheafGCNLayer.compute_sheaf(A_uv_t=A_uv_t, A_v_u=A_vu, embeddings=embeddings, indices=v_indices)
+        c_v = ExtendableSheafGCNLayer.scale_sheaf(adj_matrix=adj_matrix, u_indices=u_indices, v_indices=v_indices, h_v=h_v)
+        m_u = ExtendableSheafGCNLayer.compute_message(embeddings=embeddings, u_indices=u_indices, sheafs=c_v)
 
         if not compute_losses:
             return m_u
 
-        # compute intermediate values for loss diff
-        diff_x = (m_u - embeddings).unsqueeze(-1)
-        diff_w = torch.bmm(diff_x.swapaxes(-1, -2), diff_x)
-        diff_loss = diff_w.mean()
-
-        # compute intermediate values for loss cons
-        # P(u, v) = A(u, v)^T A(u, v)
-        cons_p = torch.bmm(A_uv_t, A_uv)
-        # A(u, v) - A(u, v) P(u, v)
-        cons_y = A_uv - torch.bmm(A_uv, cons_p)
-        # Q(u, v) = (A(u, v) - A(u, v) P(u, v))^T (A(u, v) - A(u, v) P(u, v))
-        cons_q = torch.bmm(cons_y.swapaxes(-1, -2), cons_y)
-        # W(u, v) = x(u)^T Q(u, v) x(u)
-        cons_w1 = torch.bmm(cons_q, embeddings_u.unsqueeze(-1))
-        cons_w2 = torch.bmm(embeddings_u.unsqueeze(-1).swapaxes(-1, -2), cons_w1)
-        cons_loss = cons_w2.mean()
-
-        # compute intermediate values for loss orth
-        orth_aat = torch.bmm(A_uv, A_uv_t)
-        orth_q = orth_aat - self.orth_eye
-        orth_z = torch.bmm(orth_q.swapaxes(-1, -2), orth_q)
-
-        # compute trace
-        orth = torch.einsum("ijj", orth_z)
-        orth_loss = torch.mean(orth)
+        diff_loss = ExtendableSheafGCNLayer.compute_diff_loss(messages=m_u, embeddings=embeddings)
+        cons_loss = ExtendableSheafGCNLayer.compute_cons_loss(embeddings=embeddings, u_indices=u_indices, A_uv=A_uv, A_uv_t=A_uv_t)
+        orth_loss = ExtendableSheafGCNLayer.compute_orth_loss(A_uv=A_uv, A_uv_t=A_uv_t, orth_eye=self.orth_eye)
 
         return m_u, diff_loss, cons_loss, orth_loss
 
@@ -279,14 +335,27 @@ class ExtendableSheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset,
-                 layer_types: list[str]):
+                 layer_types: list[str] = None,
+                 losses: list[str] = None,
+                 composition_type: str = LayerCompositionType.ADDITIVE):
         super(ExtendableSheafGCN, self).__init__()
+
+        if layer_types is None:
+            layer_types = [OperatorComputeLayerType.LAYER_SINGLE_ENTITY]
+
+        if losses is None:
+            self.losses = {}
+        else:
+            self.losses = set(losses)
+
+        assert all([loss in {Losses.ORTHOGONALITY, Losses.CONSISTENCY} for loss in self.losses]), "unknown loss type"
+        assert layer_types, "layers may not be empty"
+
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
-
-        assert layer_types, "layers may not be empty"
+        self.composition_type = composition_type
 
         # every layer is the same
         self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
@@ -294,15 +363,16 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.sheaf_conv3 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
 
         self.edge_index = self.dataset.train_edge_index
-        self.adj = self.dataset.adjacency_matrix
-        degree = self.adj.sum(dim=1)
+        self.adj = ExtendableSheafGCN.compute_adj_normalized(self.dataset.adjacency_matrix)
+        self.init_parameters()
+
+    @staticmethod
+    def compute_adj_normalized(adjacency_matrix):
+        degree = adjacency_matrix.sum(dim=1)
         degree_inv_sqrt = torch.pow(degree, -0.5)
         degree_inv_sqrt[torch.isinf(degree_inv_sqrt)] = 0
         diag_degree_inv_sqrt = torch.diag(degree_inv_sqrt)
-        self.normalized_adj = diag_degree_inv_sqrt @ self.adj @ diag_degree_inv_sqrt
-        self.adj = self.normalized_adj
-        self.train_edge_index = self.dataset.train_edge_index
-        self.init_parameters()
+        return diag_degree_inv_sqrt @ adjacency_matrix @ diag_degree_inv_sqrt
 
     def create_operator_layers(self, layer_types: list[str]):
         layers = list()
@@ -312,6 +382,7 @@ class ExtendableSheafGCN(pl.LightningModule):
             "dimy": self.latent_dim,
             "user_indices": list(range(self.dataset.num_users)),
             "item_indices": list(range(self.dataset.num_users, self.dataset.num_users + self.dataset.num_items)),
+            "composition_type": self.composition_type,
         }
 
         def make_layer(layer_type: str):
@@ -362,7 +433,13 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         w_diff, w_orth, w_cons, w_bpr = compute_loss_weights_simple(loss_diff, loss_orth, loss_cons, bpr_loss, 1024)
 
-        loss = w_diff * loss_diff + w_orth * loss_orth + w_cons * loss_cons + w_bpr * bpr_loss
+        loss = w_diff * loss_diff + w_bpr * bpr_loss  # + w_orth * loss_orth + w_cons * loss_cons
+
+        if Losses.CONSISTENCY in self.losses:
+            loss += w_cons * loss_cons
+
+        if Losses.ORTHOGONALITY in self.losses:
+            loss += w_orth * loss_orth
 
         self.log('bpr_loss', bpr_loss)
         self.log('loss_diff', loss_diff)
