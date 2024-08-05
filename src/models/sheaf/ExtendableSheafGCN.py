@@ -20,6 +20,7 @@ class Losses:
 class OperatorComputeLayerType:
     LAYER_GLOBAL = "global"
     LAYER_SINGLE_ENTITY = "single"
+    LAYER_SINGLE_ENTITY_DISTINCT = "single_distinct"
     LAYER_PAIRED_ENTITIES = "paired"
 
 class LayerCompositionType:
@@ -165,6 +166,49 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
         self.fc_smat.apply(OperatorComputeLayer.init_layer)
 
 
+class SingleEntityDistinctOperatorComputeLayer(OperatorComputeLayer):
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64):
+        super(SingleEntityDistinctOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
+
+        # maybe create two selarate FFNs for user and item nodes?
+        self.fc_smat_user = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
+        self.fc_smat_item = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
+
+    def compute(self,
+                operators: SheafOperators,
+                embeddings: torch.Tensor,
+                u_indices: torch.Tensor,
+                v_indices: torch.Tensor) -> SheafOperators:
+
+        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings), (-1, self.dimy, self.dimx))
+        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings), (-1, self.dimy, self.dimx))
+
+        u_user_mask = torch.isin(u_indices, self.user_indices)
+        u_item_mask = torch.isin(u_indices, self.item_indices)
+        v_user_mask = torch.isin(v_indices, self.user_indices)
+        v_item_mask = torch.isin(v_indices, self.item_indices)
+
+        if self.composition_type == LayerCompositionType.ADDITIVE:
+            operators.operator_uv[u_user_mask, ...] += operator_by_embedding_user[u_indices[u_user_mask], ...]
+            operators.operator_uv[u_item_mask, ...] += operator_by_embedding_item[u_indices[u_item_mask], ...]
+            operators.operator_vu[v_user_mask, ...] += operator_by_embedding_user[v_indices[v_user_mask], ...]
+            operators.operator_vu[v_item_mask, ...] += operator_by_embedding_item[v_indices[v_item_mask], ...]
+        else:
+            operators.operator_uv[u_user_mask, ...] = torch.bmm(operator_by_embedding_user[u_indices[u_user_mask], ...], operators.operator_uv[u_user_mask, ...])
+            operators.operator_uv[u_item_mask, ...] = torch.bmm(operator_by_embedding_item[u_indices[u_item_mask], ...], operators.operator_uv[u_item_mask, ...])
+            operators.operator_vu[v_user_mask, ...] = torch.bmm(operator_by_embedding_user[v_indices[v_user_mask], ...], operators.operator_vu[v_user_mask, ...])
+            operators.operator_vu[v_item_mask, ...] = torch.bmm(operator_by_embedding_item[v_indices[v_item_mask], ...], operators.operator_vu[v_item_mask, ...])
+
+        return operators
+
+    def priority(self):
+        return 3
+
+    def init_parameters(self):
+        self.fc_smat_user.apply(OperatorComputeLayer.init_layer)
+        self.fc_smat_item.apply(OperatorComputeLayer.init_layer)
+
+
 class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
     def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 32):
         super(PairedEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
@@ -200,7 +244,7 @@ class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
         return operators
 
     def priority(self):
-        return 3
+        return 4
 
     def init_parameters(self):
         self.fc_smat.apply(OperatorComputeLayer.init_layer)
