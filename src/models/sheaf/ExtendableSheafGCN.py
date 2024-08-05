@@ -17,37 +17,36 @@ class Losses:
     ORTHOGONALITY = "orth"
     CONSISTENCY = "cons"
 
+
 class OperatorComputeLayerType:
     LAYER_GLOBAL = "global"
     LAYER_SINGLE_ENTITY = "single"
     LAYER_SINGLE_ENTITY_DISTINCT = "single_distinct"
     LAYER_PAIRED_ENTITIES = "paired"
 
+
 class LayerCompositionType:
     MULTIPLICATIVE = "mult"
     ADDITIVE = "add"
 
 
-def make_fc_transform(inpt: int, outpt: tuple[int, int], nsmat: int):
+class OperatorComputeLayerTrainMode:
+    CONSECUTIVE = "cons"  # second, but not first, and not third yet
+    INCREMENTAL = "inc"  # first and second, but not third
+    SIMULTANEOUS = "sim"  # first and second and third
+
+
+def make_fc_transform(inpt: int, outpt: tuple[int, int], nsmat: int, depth: int = 6):
     assert len(outpt) == 2, "incorrect output dim"
 
-    return nn.Sequential(
-        nn.Linear(inpt, nsmat),
-        nn.ReLU(),
-        nn.Linear(nsmat, nsmat),
-        nn.ReLU(),
-        nn.Linear(nsmat, nsmat),
-        nn.ReLU(),
-        nn.Linear(nsmat, nsmat),
-        nn.ReLU(),
-        nn.Linear(nsmat, nsmat),
-        nn.ReLU(),
-        nn.Linear(nsmat, nsmat),
-        nn.ReLU(),
-        nn.Linear(nsmat, nsmat),
-        nn.ReLU(),
-        nn.Linear(nsmat, outpt[0] * outpt[1])
-    )
+    layers = [nn.Linear(inpt, nsmat), nn.ReLU()]
+
+    for i in range(depth):
+        layers.append(nn.Linear(nsmat, nsmat))
+        layers.append(nn.ReLU())
+
+    layers.append(nn.Linear(nsmat, outpt[0] * outpt[1]))
+    return nn.Sequential(*layers)
 
 
 @dataclasses.dataclass
@@ -136,11 +135,11 @@ class GlobalOperatorComputeLayer(OperatorComputeLayer):
 
 
 class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64):
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64, depth: int = 6):
         super(SingleEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         # maybe create two selarate FFNs for user and item nodes?
-        self.fc_smat = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
+        self.fc_smat = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat, depth=depth)
 
     def compute(self,
                 operators: SheafOperators,
@@ -167,12 +166,12 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
 
 
 class SingleEntityDistinctOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64):
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64, depth: int = 6):
         super(SingleEntityDistinctOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         # maybe create two selarate FFNs for user and item nodes?
-        self.fc_smat_user = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
-        self.fc_smat_item = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat)
+        self.fc_smat_user = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat, depth=depth)
+        self.fc_smat_item = make_fc_transform(self.dimx, (self.dimx, self.dimy), nsmat, depth=depth)
 
     def compute(self,
                 operators: SheafOperators,
@@ -210,14 +209,14 @@ class SingleEntityDistinctOperatorComputeLayer(OperatorComputeLayer):
 
 
 class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
-    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 32):
+    def __init__(self, dimx: int, dimy: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 32, depth: int = 6):
         super(PairedEntityOperatorComputeLayer, self).__init__(dimx, dimy, user_indices, item_indices, composition_type)
 
         self.dimx = dimx
         self.dimy = dimy
 
         # maybe create two selarate FFNs for user and item nodes?
-        self.fc_smat = make_fc_transform(self.dimx * 2, (self.dimx, self.dimy), nsmat)
+        self.fc_smat = make_fc_transform(self.dimx * 2, (self.dimx, self.dimy), nsmat, depth=depth)
 
     def compute(self,
                 operators: SheafOperators,
@@ -251,13 +250,21 @@ class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
 
 
 class ExtendableSheafGCNLayer(nn.Module):
-    def __init__(self, dimx: int, dimy: int, operator_compute_layers: list[OperatorComputeLayer]):
+    def __init__(self,
+                 dimx: int,
+                 dimy: int,
+                 operator_compute_layers: list[OperatorComputeLayer],
+                 operator_compute_train_mode: str = OperatorComputeLayerTrainMode.SIMULTANEOUS,
+                 epochs_per_operator: int = None):
         super(ExtendableSheafGCNLayer, self).__init__()
         self.dimx = dimx
         self.dimy = dimy
         self.operator_compute_layers = nn.ModuleList(operator_compute_layers)
+        self.epochs_per_operator = epochs_per_operator
+        self.train_mode = operator_compute_train_mode
 
         self.orth_eye = torch.eye(self.dimy).unsqueeze(0)
+        self.current_epoch = 0
 
     @staticmethod
     def compute_sheaf(A_uv_t, A_v_u, embeddings, indices) -> torch.Tensor:
@@ -341,6 +348,29 @@ class ExtendableSheafGCNLayer(nn.Module):
 
         return torch.mean(orth)
 
+    def compute_layer(self, layer_ix, layer, **params):
+        expected_layer_ix = self.current_epoch % self.epochs_per_operator
+
+        def infer_no_grad():
+            with torch.inference_mode():
+                return layer(**params)
+
+        def infer():
+            return layer(**params)
+
+        match self.train_mode:
+            case OperatorComputeLayerTrainMode.SIMULTANEOUS:
+                return infer()
+            case OperatorComputeLayerTrainMode.INCREMENTAL:
+                if layer_ix <= expected_layer_ix:
+                    return infer()
+            case OperatorComputeLayerTrainMode.CONSECUTIVE:
+                if layer_ix < expected_layer_ix:
+                    return infer_no_grad()
+
+                if layer_ix == expected_layer_ix:
+                    return infer()
+
     def forward(self, adj_matrix, embeddings, edge_index, compute_losses: bool = False):
         u_indices = edge_index[0, :]
         v_indices = edge_index[1, :]
@@ -350,8 +380,11 @@ class ExtendableSheafGCNLayer(nn.Module):
             torch.zeros((edge_index.shape[1], self.dimy, self.dimx), requires_grad=False)
         )
 
-        for operator_compute_layer in sorted(self.operator_compute_layers, key=lambda x: x.priority()):
-            sheaf_operators = operator_compute_layer(sheaf_operators, embeddings, u_indices, v_indices)
+        for layer_ix, operator_compute_layer in enumerate(sorted(self.operator_compute_layers, key=lambda x: x.priority())):
+            sheaf_operators = self.compute_layer(
+                layer_ix, operator_compute_layer,
+                operators=sheaf_operators, embeddings=embeddings, u_indices=u_indices, v_indices=v_indices
+            )
 
         A_uv = sheaf_operators.operator_uv
         A_vu = sheaf_operators.operator_vu
@@ -375,6 +408,9 @@ class ExtendableSheafGCNLayer(nn.Module):
         for layer in self.operator_compute_layers:
             layer.init_parameters()
 
+    def set_current_epoch(self, epoch):
+        self.current_epoch = epoch
+
 
 class ExtendableSheafGCN(pl.LightningModule):
     def __init__(self,
@@ -383,7 +419,10 @@ class ExtendableSheafGCN(pl.LightningModule):
                  layer_types: list[str] = None,
                  losses: list[str] = None,
                  composition_type: str = LayerCompositionType.ADDITIVE,
-                 sample_share: float = 1.0):
+                 sample_share: float = 1.0,
+                 operator_ffn_depth: int = 6,
+                 operator_train_model: str = OperatorComputeLayerTrainMode.SIMULTANEOUS,
+                 epochs_per_operator: int = 20):
         super(ExtendableSheafGCN, self).__init__()
 
         if layer_types is None:
@@ -403,6 +442,9 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.num_nodes = dataset.num_items + dataset.num_users
         self.composition_type = composition_type
         self.sample_share = sample_share
+        self.operator_ffn_depth = operator_ffn_depth
+        self.operator_train_model = operator_train_model
+        self.epochs_per_operator = epochs_per_operator
 
         # every layer is the same
         self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
@@ -437,10 +479,13 @@ class ExtendableSheafGCN(pl.LightningModule):
                 case OperatorComputeLayerType.LAYER_GLOBAL:
                     return GlobalOperatorComputeLayer(**params)
                 case OperatorComputeLayerType.LAYER_SINGLE_ENTITY:
+                    params.update({"operator_ffn_depth": self.operator_ffn_depth})
                     return SingleEntityOperatorComputeLayer(**params, nsmat=64)
                 case OperatorComputeLayerType.LAYER_PAIRED_ENTITIES:
+                    params.update({"operator_ffn_depth": self.operator_ffn_depth})
                     return PairedEntityOperatorComputeLayer(**params, nsmat=64)
                 case OperatorComputeLayerType.LAYER_SINGLE_ENTITY_DISTINCT:
+                    params.update({"operator_ffn_depth": self.operator_ffn_depth})
                     return SingleEntityDistinctOperatorComputeLayer(**params, nsmat=64)
 
         for layer_type in layer_types:
@@ -484,6 +529,8 @@ class ExtendableSheafGCN(pl.LightningModule):
                 p=self.sample_share
             )
 
+        self.update_epoch()
+
         embs, users_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(users, pos_items, neg_items, edge_index)
         bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
         w_diff, w_orth, w_cons, w_bpr = compute_loss_weights_simple(loss_diff, loss_orth, loss_cons, bpr_loss, 1024)
@@ -511,6 +558,11 @@ class ExtendableSheafGCN(pl.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.001)
+
+    def update_epoch(self):
+        self.sheaf_conv1.set_current_epoch(self.current_epoch)
+        self.sheaf_conv2.set_current_epoch(self.current_epoch)
+        self.sheaf_conv3.set_current_epoch(self.current_epoch)
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         out, diff_loss, cons_loss, orth_loss = self.forward_(edge_index)
