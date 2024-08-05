@@ -440,6 +440,8 @@ class ExtendableSheafGCN(pl.LightningModule):
                     return SingleEntityOperatorComputeLayer(**params, nsmat=64)
                 case OperatorComputeLayerType.LAYER_PAIRED_ENTITIES:
                     return PairedEntityOperatorComputeLayer(**params, nsmat=64)
+                case OperatorComputeLayerType.LAYER_SINGLE_ENTITY_DISTINCT:
+                    return SingleEntityDistinctOperatorComputeLayer(**params, nsmat=64)
 
         for layer_type in layer_types:
             layers.append(make_layer(layer_type))
