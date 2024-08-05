@@ -7,7 +7,9 @@ from src.models.sheaf.ExtendableSheafGCN import (
     GlobalOperatorComputeLayer,
     SingleEntityOperatorComputeLayer,
     PairedEntityOperatorComputeLayer,
-    ExtendableSheafGCNLayer, LayerCompositionType,
+    ExtendableSheafGCNLayer,
+    LayerCompositionType,
+    OperatorComputeLayerTrainMode,
 )
 
 
@@ -210,7 +212,9 @@ class TestExtendableSheafGCN(TestCase):
     def test_scale_sheaf(self):
         # compute c_v = w(v,u) * h_v
         embeddings = torch.ones((self.edge_index.shape[0], 3), dtype=torch.float32)
-        result = ExtendableSheafGCNLayer.scale_sheaf(self.adj_matrix, self.edge_index[:, 0], self.edge_index[:, 1], embeddings)
+        result = ExtendableSheafGCNLayer.scale_sheaf(
+            self.adj_matrix, self.edge_index[:, 0], self.edge_index[:, 1], embeddings
+        )
         actual, _ = torch.max(result, dim=1)
         expected = torch.tensor([1, 2, 2, 3, 1, 2, 2, 3], dtype=torch.float32)
         assert torch.allclose(actual, expected), "Incorrect result"
@@ -234,7 +238,7 @@ class TestExtendableSheafGCN(TestCase):
 
         actual = ExtendableSheafGCNLayer.compute_diff_loss(messages, embeddings)
 
-        assert torch.allclose(actual, torch.tensor(6./36)), "Incorrect result"
+        assert torch.allclose(actual, torch.tensor(6. / 36)), "Incorrect result"
 
     def test_cons_loss(self):
         # computation is straight forward but test is not, maybe implement it in future
@@ -249,6 +253,60 @@ class TestExtendableSheafGCN(TestCase):
         A = orth.unsqueeze(0)
         A_t = A.swapaxes(-1, -2)
 
-        actual = ExtendableSheafGCNLayer.compute_orth_loss(A, 2*A_t, eye)
+        actual = ExtendableSheafGCNLayer.compute_orth_loss(A, 2 * A_t, eye)
 
         assert torch.allclose(actual, torch.tensor(6.)), "Incorrect result"
+
+    def test_compute_layer(self):
+        order = [0, 0, 0]
+
+        def conditional_set(x):
+            if torch.is_inference_mode_enabled():
+                order[x] = 1  # no grad
+            else:
+                order[x] = 2  # with grad
+
+        def create(layers, mode):
+            return ExtendableSheafGCNLayer(5, 5,
+                                           layers,
+                                           epochs_per_operator=6,
+                                           operator_compute_train_mode=mode)
+
+        first = LambdaModule(lambda x: conditional_set(x))
+        second = LambdaModule(lambda x: conditional_set(x))
+        third = LambdaModule(lambda x: conditional_set(x))
+
+        sheaf_layer = create([first, second, third], OperatorComputeLayerTrainMode.CONSECUTIVE)
+
+        sheaf_layer.compute_layer(0, first, x=0)
+        sheaf_layer.compute_layer(1, second, x=1)
+        sheaf_layer.compute_layer(2, third, x=2)
+
+        assert order == [2, 0, 0]
+
+        sheaf_layer = create([first, second, third], OperatorComputeLayerTrainMode.CONSECUTIVE)
+        sheaf_layer.set_current_epoch(7)
+
+        sheaf_layer.compute_layer(0, first, x=0)
+        sheaf_layer.compute_layer(1, second, x=1)
+        sheaf_layer.compute_layer(2, third, x=2)
+
+        assert order == [1, 2, 0]
+
+        sheaf_layer = create([first, second, third], OperatorComputeLayerTrainMode.INCREMENTAL)
+        sheaf_layer.set_current_epoch(7)
+
+        sheaf_layer.compute_layer(0, first, x=0)
+        sheaf_layer.compute_layer(1, second, x=1)
+        sheaf_layer.compute_layer(2, third, x=2)
+
+        assert order == [2, 2, 0]
+
+        sheaf_layer = create([first, second, third], OperatorComputeLayerTrainMode.SIMULTANEOUS)
+        sheaf_layer.set_current_epoch(7)
+
+        sheaf_layer.compute_layer(0, first, x=0)
+        sheaf_layer.compute_layer(1, second, x=1)
+        sheaf_layer.compute_layer(2, third, x=2)
+
+        assert order == [2, 2, 2]
