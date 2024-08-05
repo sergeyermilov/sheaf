@@ -5,12 +5,14 @@ DATASET=$2
 EPOCHS=$3
 LATENT_DIMS=$4
 SAMPLE_SHARE=$5
+BATCH_SIZE=$6
 
 echo "DEVICE = $DEVICE"
 echo "DATASET = $DATASET"
 echo "EPOCHS = $EPOCHS"
 echo "LATENT_DIMS = $LATENT_DIMS"
 echo "SAMPLE_SHARE = $SAMPLE_SHARE"
+echo "BATCH_SIZE = $BATCH_SIZE"
 
 ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}_$(date +%s)"
 
@@ -20,13 +22,13 @@ ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}_$(date +%s)"
 #python -m src.train --model SheafGCN --params "{'latent_dim':$LATENT_DIMS}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 #python -m src.train --model LightGCN --params "{'latent_dim':$LATENT_DIMS}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 #python -m src.train --model ESheafGCN --params "{'latent_dim':$LATENT_DIMS}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global','single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-python -m src.train --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global','single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --batch-size $BATCH_SIZE --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --batch-size $BATCH_SIZE --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --batch-size $BATCH_SIZE --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --batch-size $BATCH_SIZE --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global','single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --batch-size $BATCH_SIZE --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --batch-size $BATCH_SIZE --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+python -m src.train --batch-size $BATCH_SIZE --model ExtendableSheafGCN --params "{'sample_share':$SAMPLE_SHARE, 'latent_dim':$LATENT_DIMS,'layer_types':['global','single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 
 
 if [ ! -d "$ARTIFACT_DIR" ]; then
