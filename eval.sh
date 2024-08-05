@@ -12,7 +12,7 @@ echo "EPOCHS = $EPOCHS"
 echo "LATENT_DIMS = $LATENT_DIMS"
 echo "SAMPLE_SHARE = $SAMPLE_SHARE"
 
-ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}"
+ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}_$(date +%s)"
 
 #python -m src.train --model TopKPopularity --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 #python -m src.train --model EASE --params "{'lambda_reg':250}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR

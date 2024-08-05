@@ -6,7 +6,7 @@ MODEL=ExtendableSheafGCN
 COMPOSITION=mult
 
 
-ARTIFACT_DIR="./ABLATION_${MODEL}_${DATASET}_${COMPOSITION}_${EPOCHS}"
+ARTIFACT_DIR="./ABLATION_${MODEL}_${DATASET}_${COMPOSITION}_${EPOCHS}_$(date +%s)"
 
 #for SEED in {1..10}; do
 #  echo "Compute for seed ${SEED}"
