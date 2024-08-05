@@ -421,8 +421,8 @@ class ExtendableSheafGCN(pl.LightningModule):
                  composition_type: str = LayerCompositionType.ADDITIVE,
                  sample_share: float = 1.0,
                  operator_ffn_depth: int = 6,
-                 operator_train_model: str = OperatorComputeLayerTrainMode.SIMULTANEOUS,
-                 epochs_per_operator: int = 20):
+                 operator_train_mode: str = OperatorComputeLayerTrainMode.SIMULTANEOUS,
+                 epochs_per_operator: int = 30):
         super(ExtendableSheafGCN, self).__init__()
 
         if layer_types is None:
@@ -443,13 +443,13 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.composition_type = composition_type
         self.sample_share = sample_share
         self.operator_ffn_depth = operator_ffn_depth
-        self.operator_train_model = operator_train_model
+        self.operator_train_mode = operator_train_mode
         self.epochs_per_operator = epochs_per_operator
 
         # every layer is the same
-        self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
-        self.sheaf_conv2 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
-        self.sheaf_conv3 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types))
+        self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
+        self.sheaf_conv2 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
+        self.sheaf_conv3 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = ExtendableSheafGCN.compute_adj_normalized(self.dataset.adjacency_matrix)
@@ -479,13 +479,13 @@ class ExtendableSheafGCN(pl.LightningModule):
                 case OperatorComputeLayerType.LAYER_GLOBAL:
                     return GlobalOperatorComputeLayer(**params)
                 case OperatorComputeLayerType.LAYER_SINGLE_ENTITY:
-                    params.update({"operator_ffn_depth": self.operator_ffn_depth})
+                    params.update({"depth": self.operator_ffn_depth})
                     return SingleEntityOperatorComputeLayer(**params, nsmat=64)
                 case OperatorComputeLayerType.LAYER_PAIRED_ENTITIES:
-                    params.update({"operator_ffn_depth": self.operator_ffn_depth})
+                    params.update({"depth": self.operator_ffn_depth})
                     return PairedEntityOperatorComputeLayer(**params, nsmat=64)
                 case OperatorComputeLayerType.LAYER_SINGLE_ENTITY_DISTINCT:
-                    params.update({"operator_ffn_depth": self.operator_ffn_depth})
+                    params.update({"depth": self.operator_ffn_depth})
                     return SingleEntityDistinctOperatorComputeLayer(**params, nsmat=64)
 
         for layer_type in layer_types:
