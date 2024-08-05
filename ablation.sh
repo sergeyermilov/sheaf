@@ -3,7 +3,7 @@ DATASET=FACEBOOK
 DEVICE=cuda
 EPOCHS=40
 MODEL=ExtendableSheafGCN
-COMPOSITION=add
+COMPOSITION=mult
 
 
 ARTIFACT_DIR="./ABLATION_${MODEL}_${DATASET}_${COMPOSITION}_${EPOCHS}"
@@ -18,13 +18,13 @@ ARTIFACT_DIR="./ABLATION_${MODEL}_${DATASET}_${COMPOSITION}_${EPOCHS}"
 
 for SEED in {1..10}; do
   echo "Compute for seed ${SEED}"
+  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['single_distinct']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['global']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['global','single']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['global','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['global','single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  #python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['global','single_distinct']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  #python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['global','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  #python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  #python -m src.train --model $MODEL --seed $SEED --params "{'latent_dim':$LATENT_DIMS,'composition_type': '$COMPOSITION', 'losses':['orth','cons'], 'layer_types':['global','single','paired']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 done
 
 if [ ! -d "$ARTIFACT_DIR" ]; then
