@@ -149,7 +149,7 @@ class SingleEntityOperatorComputeLayer(OperatorComputeLayer):
 
         operator_by_embedding = torch.reshape(self.fc_smat(embeddings), (-1, self.dimy, self.dimx))
 
-        if self.composition_type == LayerCompositionType.ADDITIVE:
+        if self.composition_type == LayerCompositionType.ADDITIVE or torch.allclose(embeddings.sum(), torch.tensor(0)):
             operators.operator_uv += operator_by_embedding[u_indices, ...]
             operators.operator_vu += operator_by_embedding[v_indices, ...]
         else:
@@ -187,7 +187,7 @@ class SingleEntityDistinctOperatorComputeLayer(OperatorComputeLayer):
         v_user_mask = torch.isin(v_indices, self.user_indices)
         v_item_mask = torch.isin(v_indices, self.item_indices)
 
-        if self.composition_type == LayerCompositionType.ADDITIVE:
+        if self.composition_type == LayerCompositionType.ADDITIVE or torch.allclose(embeddings.sum(), torch.tensor(0)):
             operators.operator_uv[u_user_mask, ...] += operator_by_embedding_user[u_indices[u_user_mask], ...]
             operators.operator_uv[u_item_mask, ...] += operator_by_embedding_item[u_indices[u_item_mask], ...]
             operators.operator_vu[v_user_mask, ...] += operator_by_embedding_user[v_indices[v_user_mask], ...]
@@ -233,7 +233,7 @@ class PairedEntityOperatorComputeLayer(OperatorComputeLayer):
         operator_uv = torch.reshape(self.fc_smat(combined_embeddings_uv), (-1, self.dimy, self.dimx))
         operator_vu = torch.reshape(self.fc_smat(combined_embeddings_vu), (-1, self.dimy, self.dimx))
 
-        if self.composition_type == LayerCompositionType.ADDITIVE:
+        if self.composition_type == LayerCompositionType.ADDITIVE or torch.allclose(embeddings.sum(), torch.tensor(0)):
             operators.operator_uv += operator_uv
             operators.operator_vu += operator_vu
         else:
@@ -371,6 +371,8 @@ class ExtendableSheafGCNLayer(nn.Module):
                 if layer_ix == expected_layer_ix:
                     return infer()
 
+        return None
+
     def forward(self, adj_matrix, embeddings, edge_index, compute_losses: bool = False):
         u_indices = edge_index[0, :]
         v_indices = edge_index[1, :]
@@ -381,10 +383,13 @@ class ExtendableSheafGCNLayer(nn.Module):
         )
 
         for layer_ix, operator_compute_layer in enumerate(sorted(self.operator_compute_layers, key=lambda x: x.priority())):
-            sheaf_operators = self.compute_layer(
+            sheaf_operators_updated = self.compute_layer(
                 layer_ix, operator_compute_layer,
                 operators=sheaf_operators, embeddings=embeddings, u_indices=u_indices, v_indices=v_indices
             )
+
+            if sheaf_operators_updated is not None:
+                sheaf_operators = sheaf_operators_updated
 
         A_uv = sheaf_operators.operator_uv
         A_vu = sheaf_operators.operator_vu
