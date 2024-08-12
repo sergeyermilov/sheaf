@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 from torch import nn
 from torch_geometric.utils import dropout_edge
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
+from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_loss_weight_paper
 
 """
 This is extension over an approach implemented in EXSheafGCN. Here we use FFN over two embeddings and two global matrices
@@ -453,8 +453,8 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         # every layer is the same
         self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
-        self.sheaf_conv2 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
-        self.sheaf_conv3 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
+        # self.sheaf_conv2 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
+        # self.sheaf_conv3 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
 
         self.edge_index = self.dataset.train_edge_index
         self.adj = ExtendableSheafGCN.compute_adj_normalized(self.dataset.adjacency_matrix)
@@ -505,22 +505,22 @@ class ExtendableSheafGCN(pl.LightningModule):
     def init_parameters(self):
         nn.init.normal_(self.embedding.weight, std=0.1)
         self.sheaf_conv1.init_parameters()
-        self.sheaf_conv2.init_parameters()
-        self.sheaf_conv3.init_parameters()
+        # self.sheaf_conv2.init_parameters()
+        # self.sheaf_conv3.init_parameters()
 
     def forward_(self, edge_index):
         emb0 = self.embedding.weight
-        m_u0, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(self.adj, emb0, edge_index, True)
-        m_u1 = self.sheaf_conv2(self.adj, m_u0, edge_index)
-        out = self.sheaf_conv3(self.adj, m_u1, edge_index)
+        m_u0 = self.sheaf_conv1(self.adj, emb0, edge_index, False)
+        m_u1 = self.sheaf_conv1(self.adj, m_u0, edge_index, False)
+        out, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(self.adj, m_u1, edge_index, True)
 
         return out, diff_loss, cons_loss, orth_loss
 
     def forward(self, edge_index):
         emb0 = self.embedding.weight
         m_u0 = self.sheaf_conv1(self.adj, emb0, edge_index)
-        m_u1 = self.sheaf_conv2(self.adj, m_u0, edge_index)
-        out = self.sheaf_conv3(self.adj, m_u1, edge_index)
+        m_u1 = self.sheaf_conv1(self.adj, m_u0, edge_index)
+        out = self.sheaf_conv1(self.adj, m_u1, edge_index)
 
         return emb0, out
 
@@ -537,9 +537,9 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.update_epoch()
 
         embs, users_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(users, pos_items, neg_items, edge_index)
-        bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
-        w_diff, w_orth, w_cons, w_bpr = compute_loss_weights_simple(loss_diff, loss_orth, loss_cons, bpr_loss, 1024)
+        w_diff, w_orth, w_cons, w_bpr = compute_loss_weight_paper(loss_diff, loss_orth, loss_cons, len(batch))
 
+        bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
         loss = w_diff * loss_diff + w_bpr * bpr_loss
 
         if Losses.CONSISTENCY in self.losses:
@@ -566,8 +566,8 @@ class ExtendableSheafGCN(pl.LightningModule):
 
     def update_epoch(self):
         self.sheaf_conv1.set_current_epoch(self.current_epoch)
-        self.sheaf_conv2.set_current_epoch(self.current_epoch)
-        self.sheaf_conv3.set_current_epoch(self.current_epoch)
+        # self.sheaf_conv2.set_current_epoch(self.current_epoch)
+        # self.sheaf_conv3.set_current_epoch(self.current_epoch)
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         out, diff_loss, cons_loss, orth_loss = self.forward_(edge_index)
