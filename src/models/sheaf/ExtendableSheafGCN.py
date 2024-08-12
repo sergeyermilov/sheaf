@@ -431,7 +431,7 @@ class ExtendableSheafGCN(pl.LightningModule):
         super(ExtendableSheafGCN, self).__init__()
 
         if layer_types is None:
-            layer_types = [OperatorComputeLayerType.LAYER_SINGLE_ENTITY]
+            layer_types = [OperatorComputeLayerType.LAYER_SINGLE_ENTITY_DISTINCT]
 
         if losses is None:
             self.losses = {Losses.ORTHOGONALITY, Losses.CONSISTENCY}
