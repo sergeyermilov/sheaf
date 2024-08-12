@@ -70,8 +70,8 @@ def compute_loss_weight_paper(loss_diff: torch.Tensor,
         nbatch_sqrt = torch.sqrt(torch.tensor(nbatch))
 
         w_cons = torch.exp(-kappa * nbatch_sqrt * loss_orth)
-        w_diff = torch.exp(-kappa * nbatch_sqrt * torch.max(loss_orth, loss_cons))
-        w_bpr = torch.exp(-kappa * nbatch_sqrt * torch.max(loss_orth, loss_cons, loss_diff))
+        w_diff = torch.exp(-kappa * nbatch_sqrt * torch.max(torch.tensor([loss_orth, loss_cons])))
+        w_bpr = torch.exp(-kappa * nbatch_sqrt * torch.max(torch.tensor([loss_orth, loss_cons, loss_diff])))
 
         w_summ = w_orth + w_diff + w_cons + w_bpr
 
