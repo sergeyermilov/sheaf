@@ -60,6 +60,7 @@ def compute_loss_weight_paper(loss_diff: torch.Tensor,
                               loss_cons: torch.Tensor,
                               nbatch: int,
                               kappa: float = 0.01e0):
+
     with torch.no_grad():
         w_orth = 1.0
 
