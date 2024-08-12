@@ -537,7 +537,7 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.update_epoch()
 
         embs, users_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(users, pos_items, neg_items, edge_index)
-        w_diff, w_orth, w_cons, w_bpr = compute_loss_weight_paper(loss_diff, loss_orth, loss_cons, len(batch))
+        w_diff, w_orth, w_cons, w_bpr = compute_loss_weight_paper(loss_diff, loss_orth, loss_cons, len(users))
 
         bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
         loss = w_diff * loss_diff + w_bpr * bpr_loss

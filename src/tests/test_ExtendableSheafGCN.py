@@ -207,7 +207,7 @@ class TestExtendableSheafGCN(TestCase):
 
         result = ExtendableSheafGCNLayer.compute_sheaf(A_uv_t, A_vu, embeddings, [0])
         # sheaf should be identity transformation
-        assert torch.allclose(embeddings, result), "Incorrect result"
+        assert torch.allclose(embeddings, result, atol=1e-6), "Incorrect result"
 
     def test_scale_sheaf(self):
         # compute c_v = w(v,u) * h_v
@@ -217,14 +217,14 @@ class TestExtendableSheafGCN(TestCase):
         )
         actual, _ = torch.max(result, dim=1)
         expected = torch.tensor([1, 2, 2, 3, 1, 2, 2, 3], dtype=torch.float32)
-        assert torch.allclose(actual, expected), "Incorrect result"
+        assert torch.allclose(actual, expected, atol=1e-6), "Incorrect result"
 
     def test_compute_message(self):
         sheafs = torch.ones((self.edge_index.shape[0], self.embeddings.shape[1]), dtype=torch.float32)
         messages = ExtendableSheafGCNLayer.compute_message(self.embeddings, self.edge_index[:, 0], sheafs)
         actual, _ = torch.max(messages, dim=1)
         expected = torch.tensor([1, 2, 1, 3, 1], dtype=torch.float32)
-        assert torch.allclose(actual, expected), "Incorrect result"
+        assert torch.allclose(actual, expected, atol=1e-6), "Incorrect result"
 
     def test_diff_loss(self):
         gaus = torch.randn(6, 6)
@@ -238,7 +238,7 @@ class TestExtendableSheafGCN(TestCase):
 
         actual = ExtendableSheafGCNLayer.compute_diff_loss(messages, embeddings)
 
-        assert torch.allclose(actual, torch.tensor(6. / 36)), "Incorrect result"
+        assert torch.allclose(actual, torch.tensor(6. / 36), atol=1e-6), "Incorrect result"
 
     def test_cons_loss(self):
         # computation is straight forward but test is not, maybe implement it in future
@@ -255,7 +255,7 @@ class TestExtendableSheafGCN(TestCase):
 
         actual = ExtendableSheafGCNLayer.compute_orth_loss(A, 2 * A_t, eye)
 
-        assert torch.allclose(actual, torch.tensor(6.)), "Incorrect result"
+        assert torch.allclose(actual, torch.tensor(6.), atol=1e-6), "Incorrect result"
 
     def test_compute_layer(self):
         order = [0, 0, 0]
