@@ -60,9 +60,9 @@ def compute_loss_weight_paper(loss_diff: torch.Tensor,
                               loss_cons: torch.Tensor,
                               nbatch: int,
                               kappa: float = 0.01e0):
-    w_orth = 1.0
-
     with torch.no_grad():
+        w_orth = 1.0
+
         loss_diff = loss_diff.detach().clone()
         loss_orth = loss_orth.detach().clone()
         loss_cons = loss_cons.detach().clone()
@@ -73,11 +73,11 @@ def compute_loss_weight_paper(loss_diff: torch.Tensor,
         w_diff = torch.exp(-kappa * nbatch_sqrt * torch.max(loss_orth, loss_cons))
         w_bpr = torch.exp(-kappa * nbatch_sqrt * torch.max(loss_orth, loss_cons, loss_diff))
 
-    w_summ = w_orth + w_diff + w_cons + w_bpr
+        w_summ = w_orth + w_diff + w_cons + w_bpr
 
-    w_orth = w_orth / w_summ
-    w_diff = w_diff / w_summ
-    w_cons = w_cons / w_summ
-    w_bpr = w_bpr / w_summ
+        w_orth = w_orth / w_summ
+        w_diff = w_diff / w_summ
+        w_cons = w_cons / w_summ
+        w_bpr = w_bpr / w_summ
 
-    return w_diff, w_orth, w_cons, w_bpr
+        return w_diff, w_orth, w_cons, w_bpr
