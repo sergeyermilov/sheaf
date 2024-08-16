@@ -1,1 +1,1 @@
-from model import ExtendableSheafGCN
+from .model import ExtendableSheafGCN
