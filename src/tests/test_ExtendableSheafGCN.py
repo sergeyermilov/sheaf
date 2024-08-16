@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 from unittest import TestCase
 
-from src.models.sheaf.ExtendableSheafGCN import (
+from src.models.sheaf.ExtendableSheafGCN.model import (
     ExtendableSheafGCNLayer,
     OperatorComputeLayerTrainMode,
 )
-from src.models.sheaf.extendable.compute_layer import (
+from src.models.sheaf.ExtendableSheafGCN.compute_layer import (
     LayerCompositionType,
     SheafOperators,
     GlobalOperatorComputeLayer,
