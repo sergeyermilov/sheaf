@@ -3,13 +3,15 @@ import torch.nn as nn
 from unittest import TestCase
 
 from src.models.sheaf.ExtendableSheafGCN import (
+    ExtendableSheafGCNLayer,
+    OperatorComputeLayerTrainMode,
+)
+from src.models.sheaf.extendable.compute_layer import (
+    LayerCompositionType,
     SheafOperators,
     GlobalOperatorComputeLayer,
     SingleEntityOperatorComputeLayer,
     PairedEntityOperatorComputeLayer,
-    ExtendableSheafGCNLayer,
-    LayerCompositionType,
-    OperatorComputeLayerTrainMode,
 )
 
 
