@@ -1,11 +1,14 @@
 import torch
 import pytorch_lightning as pl
+
 from torch import nn
 from torch_geometric.utils import dropout_edge
 
 from src.losses.bpr import compute_bpr_loss
 from src.losses.sheaf import compute_loss_weight_paper
-from src.models.sheaf.extendable.compute_layer import (
+from src.losses import Losses
+
+from .compute_layer import (
     LayerCompositionType,
     SheafOperators,
     OperatorComputeLayer,
@@ -15,7 +18,7 @@ from src.models.sheaf.extendable.compute_layer import (
     PairedEntityOperatorComputeLayer,
     OperatorComputeLayerType
 )
-from src.losses import Losses
+
 
 """
 This is extension over an approach implemented in EXSheafGCN. Here we use FFN over two embeddings and two global matrices
@@ -351,8 +354,6 @@ class ExtendableSheafGCN(pl.LightningModule):
 
     def update_epoch(self):
         self.sheaf_conv1.set_current_epoch(self.current_epoch)
-        # self.sheaf_conv2.set_current_epoch(self.current_epoch)
-        # self.sheaf_conv3.set_current_epoch(self.current_epoch)
 
     def init_grad_clipping(self, clip_value):
         for param in self.parameters():
@@ -365,5 +366,3 @@ class ExtendableSheafGCN(pl.LightningModule):
     def init_parameters(self):
         nn.init.normal_(self.embedding.weight, std=0.1)
         self.sheaf_conv1.init_parameters()
-        # self.sheaf_conv2.init_parameters()
-        # self.sheaf_conv3.init_parameters()
