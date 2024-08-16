@@ -2,12 +2,9 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
-
-
-class Losses:
-    ORTHOGONALITY = "orth"
-    CONSISTENCY = "cons"
+from src.losses.bpr import compute_bpr_loss
+from src.losses.sheaf import compute_loss_weights_simple
+from src.losses import Losses
 
 
 def debug_print_tensor(x, prefix):
@@ -63,13 +60,21 @@ class ESheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
                  dataset,
-                 losses):
+                 losses=None):
         super(ESheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
         self.losses = losses
 
-        assert all([loss in {Losses.ORTHOGONALITY, Losses.CONSISTENCY} for loss in self.losses]), "unknown loss type"
+        if losses is None:
+            self.losses = {Losses.BPR, Losses.DIFFUSION, Losses.ORTHOGONALITY, Losses.CONSISTENCY}
+        else:
+            self.losses = set(losses)
+
+        Losses.validate(self.losses)
+
+        if Losses.BPR not in self.losses:
+            raise Exception("Missing BPR loss")
 
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
