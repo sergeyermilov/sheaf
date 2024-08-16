@@ -2,7 +2,8 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
+from src.losses.bpr import compute_bpr_loss
+from src.losses.sheaf import compute_loss_weights_simple
 
 """
 This approach works only for bipartite graphs with two entities!
