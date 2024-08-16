@@ -17,6 +17,7 @@ ARTIFACT_DIR="./ABLATION_${MODEL}_${DATASET}_${COMPOSITION}_${EPOCHS}_$(date +%s
 #  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.5, 'latent_dim':$LATENT_DIMS, 'operator_train_mode': 'sim', 'losses':['bpr', 'diff', 'orth','cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 #done
 
+SEED=42
 python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.5, 'latent_dim':$LATENT_DIMS, 'operator_train_mode': 'sim', 'losses':['bpr', 'diff', 'orth', 'cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.3, 'latent_dim':$LATENT_DIMS, 'operator_train_mode': 'sim', 'losses':['bpr', 'diff', 'orth', 'cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.1, 'latent_dim':$LATENT_DIMS, 'operator_train_mode': 'sim', 'losses':['bpr', 'diff', 'orth', 'cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
