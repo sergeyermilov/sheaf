@@ -11,10 +11,10 @@ ARTIFACT_DIR="./ABLATION_${MODEL}_${DATASET}_${COMPOSITION}_${EPOCHS}_$(date +%s
 
 for SEED in {1..8}; do
   echo "Compute for seed ${SEED}"
-  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff', 'orth']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff', 'cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff', 'orth','cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.5, 'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.5, 'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff', 'orth']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.5, 'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff', 'cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model ExtendableSheafGCN --seed $SEED --params "{'grad_clip':0.5, 'latent_dim':$LATENT_DIMS, 'losses':['bpr', 'diff', 'orth','cons']}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 done
 
 #for SEED in {1..8}; do
