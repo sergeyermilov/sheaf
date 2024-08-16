@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 from torch import nn
 from torch_geometric.nn import GATConv
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple, compute_bpr_loss_with_reg
+from src.losses.bpr import compute_bpr_loss_with_reg
 
 
 def debug_print_tensor(x, prefix):
