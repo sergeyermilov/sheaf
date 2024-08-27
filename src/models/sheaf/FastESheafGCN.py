@@ -2,6 +2,7 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 from torch_geometric.utils import dropout_edge
+from torch_geometric.utils import k_hop_subgraph
 
 from src.losses.bpr import compute_bpr_loss
 from src.models.graph.LightGCN import LightGCNConv
@@ -76,12 +77,11 @@ class FastESheafGCN(pl.LightningModule):
 
 
     def training_step(self, batch):
-        users, pos_items, neg_items = batch
-        edge_index, edge_mask = dropout_edge(self.train_edge_index, p=0.0)
+        users, pos_items, neg_items, sub_edge_index = batch
         emb0, embs, users_emb, pos_emb, neg_emb = self.encode_minibatch(users,
                                                                         pos_items,
                                                                         neg_items,
-                                                                        edge_index)
+                                                                        sub_edge_index)
         bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
         loss = bpr_loss
         self.log('bpr_loss', bpr_loss)

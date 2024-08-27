@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 
 from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
-from torch_geometric.utils import to_dense_adj
+from torch_geometric.utils import to_dense_adj, k_hop_subgraph
 
 from src.data.utils import convert_edge_index_to_adjacency_map
 
@@ -49,13 +49,25 @@ class FacebookDataset(Dataset):
         user_idx = row["user_id_idx"]
         pos_item_idx = random.choice(row["item_id_idx"])
         neg_item_idx = self.sample_neg(row["item_id_idx"])
-        return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(neg_item_idx + self.num_users)
+        return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(
+            neg_item_idx + self.num_users)
+
+    def __getitems__(self, indices):
+        sample = self.pandas_data.iloc[indices]
+        user_idxs = sample["user_id_idx"].values
+        user_idxs_tensor = torch.tensor(user_idxs)
+        sample_interacted_items = self.interacted_items_by_user_idx.iloc[user_idxs]
+        pos_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: random.choice(x)).values
+        neg_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: self.sample_neg(x)).values
+        _, sub_edge_index, _, _ = k_hop_subgraph(user_idxs_tensor, 2, self.train_edge_index, relabel_nodes=False)
+        return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
 
     def sample_neg(self, x):
         while True:
             neg_id = random.randint(0, self.num_items - 1)
             if neg_id not in x:
                 return neg_id
+
 
 class FacebookDataModule(LightningDataModule):
     def __init__(self, ratings_file, sep='\t', batch_size=32, random_state=42, split="simple"):
@@ -100,18 +112,20 @@ class FacebookDataModule(LightningDataModule):
         self.test_df['user_id_idx'] = label_encoder_user.transform(self.test_df['user_id'].values)
         self.test_df['item_id_idx'] = label_encoder_item.transform(self.test_df['item_id'].values)
 
-
     def setup(self):
         # Assign train/val datasets for use in dataloaders
-        self.train_dataset = FacebookDataset(self.train_df, 42)
+        self.train_dataset = FacebookDataset(self.train_df, 42, )
         self.val_dataset = FacebookDataset(self.val_df, 42)
         self.test_dataset = FacebookDataset(self.test_df, 42)
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=11)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size)
+
+    def collate_fn(self, batch):
+        return batch

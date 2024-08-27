@@ -161,3 +161,4 @@ cython_debug/
 artifact/
 lightning_logs/
 report/
+data/

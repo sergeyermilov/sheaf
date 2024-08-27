@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 
 from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
-from torch_geometric.utils import to_dense_adj
+from torch_geometric.utils import to_dense_adj, k_hop_subgraph
 
 from src.data.utils import extract_from_archive, convert_edge_index_to_adjacency_map
 
@@ -42,7 +42,7 @@ class MovieLensDataset(Dataset):
         ))
 
         # self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
-        self.adjacency_map = convert_edge_index_to_adjacency_map(self.train_edge_index)
+        # self.adjacency_map = convert_edge_index_to_adjacency_map(self.train_edge_index)
 
     def __len__(self):
         return self.pandas_data.shape[0]
@@ -54,6 +54,16 @@ class MovieLensDataset(Dataset):
         pos_item_idx = random.choice(row["item_id_idx"])
         neg_item_idx = self.sample_neg(row["item_id_idx"])
         return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(neg_item_idx + self.num_users)
+
+    def __getitems__(self, indices):
+        sample = self.pandas_data.iloc[indices]
+        user_idxs = sample["user_id_idx"].values
+        user_idxs_tensor = torch.tensor(user_idxs)
+        sample_interacted_items = self.interacted_items_by_user_idx.iloc[user_idxs]
+        pos_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: random.choice(x)).values
+        neg_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: self.sample_neg(x)).values
+        _, sub_edge_index, _, _ = k_hop_subgraph(user_idxs_tensor, 2, self.train_edge_index, relabel_nodes=False)
+        return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
 
     def sample_neg(self, x):
         while True:
@@ -124,10 +134,13 @@ class MovieLensDataModule(LightningDataModule):
         self.test_dataset = MovieLensDataset(self.test_df)
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=11)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size)
+
+    def collate_fn(self, batch):
+        return batch
