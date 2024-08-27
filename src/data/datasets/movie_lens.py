@@ -4,6 +4,7 @@ import pathlib
 import pandas as pd
 from pytorch_lightning import LightningDataModule
 from sklearn.model_selection import train_test_split
+from functools import lru_cache
 
 from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
@@ -55,6 +56,12 @@ class MovieLensDataset(Dataset):
         neg_item_idx = self.sample_neg(row["item_id_idx"])
         return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(neg_item_idx + self.num_users)
 
+
+    def k_hop_subgraph_cached(self, user_idxs_tensor, num_hops, train_edge_index, relabel_nodes=False):
+        _, sub_edge_index, _, _ = k_hop_subgraph(user_idxs_tensor, num_hops, self.train_edge_index, relabel_nodes=False)
+        return sub_edge_index
+
+
     def __getitems__(self, indices):
         sample = self.pandas_data.iloc[indices]
         user_idxs = sample["user_id_idx"].values
@@ -62,7 +69,7 @@ class MovieLensDataset(Dataset):
         sample_interacted_items = self.interacted_items_by_user_idx.iloc[user_idxs]
         pos_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: random.choice(x)).values
         neg_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: self.sample_neg(x)).values
-        _, sub_edge_index, _, _ = k_hop_subgraph(user_idxs_tensor, 2, self.train_edge_index, relabel_nodes=False)
+        sub_edge_index = self.k_hop_subgraph_cached(user_idxs_tensor, 1, self.train_edge_index)
         return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
 
     def sample_neg(self, x):

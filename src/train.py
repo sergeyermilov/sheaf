@@ -45,16 +45,17 @@ DATASETS = {
     "YAHOO": (YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH)
 }
 
+# python -m src.train --model FastESheafGCN --params "{'latent_dim':40}" --dataset MOVIELENS10M --device cpu --epochs 10xf
 
 @click.command()
-@click.option("--model", default="LightGCN", type=str)
-@click.option("--dataset", default="FACEBOOK", type=str)
+@click.option("--model", default="FastESheafGCN", type=str)
+@click.option("--dataset", default="MOVIELENS10M", type=str)
 @click.option("--split", default="simple", type=click.Choice(['time', 'simple']))
-@click.option("--params", default="{}", type=str)
-@click.option("--dataset-dir", default="data/", type=pathlib.Path)
-@click.option("--batch-size", default=1024, type=int)
+@click.option("--params", default="{'latent_dim':40}", type=str)
+@click.option("--dataset-dir", default="../data/", type=pathlib.Path)
+@click.option("--batch-size", default=4096, type=int)
 @click.option("--epochs", default=20, type=int)
-@click.option("--device", default="cuda", type=str)
+@click.option("--device", default="cpu", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 def main(model, dataset, split, params, dataset_dir, batch_size, epochs, device, artifact_dir):
     artifact_params = dict(

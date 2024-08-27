@@ -1,8 +1,7 @@
 import torch
 import pytorch_lightning as pl
 from torch import nn
-from torch_geometric.utils import dropout_edge
-from torch_geometric.utils import k_hop_subgraph
+from torch_geometric.nn import SimpleConv
 
 from src.losses.bpr import compute_bpr_loss
 from src.models.graph.LightGCN import LightGCNConv
@@ -49,12 +48,11 @@ class FastESheafGCN(pl.LightningModule):
         super(FastESheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
-        self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
+        self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim, sparse=True)
         self.num_nodes = dataset.num_items + dataset.num_users
         self.sheaf = FastESheafLayer(latent_dim, latent_dim * 2, 40)
-        self.conv1 = LightGCNConv()
-        self.conv2 = LightGCNConv()
-        self.conv3 = LightGCNConv()
+        self.conv1 = SimpleConv()
+        self.conv2 = SimpleConv()
 
         self.train_edge_index = self.dataset.train_edge_index
         self.init_parameters()
@@ -70,9 +68,7 @@ class FastESheafGCN(pl.LightningModule):
     def forward(self, edge_index):
         emb0 = self.embedding.weight
         emb1 = self.sheaf(emb0)
-        emb2 = self.conv1(emb1, edge_index)
-        out = self.conv2(emb2, edge_index)
-
+        out = self.conv1(emb1, edge_index)
         return emb0, out
 
 
