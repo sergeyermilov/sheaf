@@ -17,6 +17,9 @@ RATINGS_FILE_CSV = "ratings.csv"
 MOVIE_LENS_1M_DATASET_RELATIVE_PATH = "ml-1m/ml-1m.tar.gz"
 MOVIE_LENS_10M_DATASET_RELATIVE_PATH = "ml-10m/ml-10m.tar.gz"
 
+# Move to external params
+NUM_K_HOPS = 1
+
 
 class MovieLensDataset(Dataset):
     def __init__(self, df, random_state=42):
@@ -54,13 +57,12 @@ class MovieLensDataset(Dataset):
         user_idx = row["user_id_idx"]
         pos_item_idx = random.choice(row["item_id_idx"])
         neg_item_idx = self.sample_neg(row["item_id_idx"])
-        return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(neg_item_idx + self.num_users)
+        return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(
+            neg_item_idx + self.num_users)
 
-
-    def k_hop_subgraph_cached(self, user_idxs_tensor, num_hops, train_edge_index, relabel_nodes=False):
+    def k_hop_subgraph(self, user_idxs_tensor, num_hops, train_edge_index, relabel_nodes=False):
         _, sub_edge_index, _, _ = k_hop_subgraph(user_idxs_tensor, num_hops, self.train_edge_index, relabel_nodes=False)
         return sub_edge_index
-
 
     def __getitems__(self, indices):
         sample = self.pandas_data.iloc[indices]
@@ -69,7 +71,7 @@ class MovieLensDataset(Dataset):
         sample_interacted_items = self.interacted_items_by_user_idx.iloc[user_idxs]
         pos_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: random.choice(x)).values
         neg_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: self.sample_neg(x)).values
-        sub_edge_index = self.k_hop_subgraph_cached(user_idxs_tensor, 1, self.train_edge_index)
+        sub_edge_index = self.k_hop_subgraph(user_idxs_tensor, NUM_K_HOPS, self.train_edge_index)
         return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
 
     def sample_neg(self, x):

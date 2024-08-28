@@ -70,7 +70,7 @@ class FacebookDataset(Dataset):
 
 
 class FacebookDataModule(LightningDataModule):
-    def __init__(self, ratings_file, sep='\t', batch_size=32, random_state=42, split="simple"):
+    def __init__(self, dataset_path: str, sep='\t', batch_size=32, random_state=42, split="simple"):
         super().__init__()
 
         if split != "simple":
@@ -79,7 +79,7 @@ class FacebookDataModule(LightningDataModule):
         self.batch_size = batch_size
 
         COLUMNS_NAME = ['user_id', 'item_id', 'rating']
-        self.pandas_data = pd.read_csv(ratings_file, sep=sep, names=COLUMNS_NAME, engine='python')
+        self.pandas_data = pd.read_csv(dataset_path, sep=sep, names=COLUMNS_NAME, engine='python')
 
         # Train/val/test splitting
         train, test = train_test_split(self.pandas_data, test_size=0.2, random_state=random_state)

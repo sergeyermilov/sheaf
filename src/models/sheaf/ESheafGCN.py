@@ -2,12 +2,16 @@ import torch
 import pytorch_lightning as pl
 from torch import nn
 
-from src.losses.bpr import compute_bpr_loss, compute_loss_weights_simple
+from src.losses.bpr import compute_bpr_loss
+from src.losses.sheaf import compute_loss_weights_simple
+from src.losses import Losses
+
 
 def debug_print_tensor(x, prefix):
     print("Tensor name: " + prefix)
     print(f"shape = {x.shape}")
     print(x)
+
 
 class ESheafLayer(nn.Module):
     def __init__(self, dimx, dimy, nsmat=64):
@@ -55,10 +59,23 @@ class ESheafLayer(nn.Module):
 class ESheafGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
-                 dataset):
+                 dataset,
+                 losses=None):
         super(ESheafGCN, self).__init__()
         self.dataset = dataset
         self.latent_dim = latent_dim
+        self.losses = losses
+
+        if losses is None:
+            self.losses = {Losses.BPR, Losses.DIFFUSION, Losses.ORTHOGONALITY, Losses.CONSISTENCY}
+        else:
+            self.losses = set(losses)
+
+        Losses.validate(self.losses)
+
+        if Losses.BPR not in self.losses:
+            raise Exception("Missing BPR loss")
+
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.num_nodes = dataset.num_items + dataset.num_users
         self.sheaf_conv1 = ESheafLayer(latent_dim, latent_dim*2, 40)
@@ -109,7 +126,15 @@ class ESheafGCN(pl.LightningModule):
         loss_orth = torch.sqrt(torch.mean(rmat * rmat) * self.latent_dim * self.latent_dim)
         loss_cons = torch.mean((smat_proj - smat) * (smat_proj - smat)) * self.latent_dim * self.latent_dim
         w_smap, w_orth, w_cons, w_bpr = compute_loss_weights_simple(loss_smap, loss_orth, loss_cons, bpr_loss, 1024)
-        loss = w_smap * loss_smap + w_orth * loss_orth + w_cons * loss_cons + w_bpr * bpr_loss
+
+        loss = w_smap * loss_smap + w_bpr * bpr_loss #+ w_orth * loss_orth + w_cons * loss_cons
+
+        if Losses.CONSISTENCY in self.losses:
+            loss += w_cons * loss_cons
+
+        if Losses.ORTHOGONALITY in self.losses:
+            loss += w_orth * loss_orth
+
         self.log('bpr_loss', bpr_loss)
         self.log('loss_smap', loss_smap)
         self.log('loss_orth', loss_orth)

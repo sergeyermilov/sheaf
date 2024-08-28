@@ -81,7 +81,6 @@ def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_ev
         _df[reco_k] = _df.progress_apply(
             lambda x: evaluate(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k), axis=1)
 
-
     _df[intersected_k] = _df.apply(lambda x: list(set(x[f"reco_{k}"]).intersection(x["item_id_idx"])), axis=1)
 
     _df[recall_k] = _df.apply(lambda x: len(x[f"intersected_{k}"]) / len(x["item_id_idx"]), axis=1)
