@@ -4,13 +4,12 @@ import pathlib
 import pandas as pd
 from pytorch_lightning import LightningDataModule
 from sklearn.model_selection import train_test_split
-from functools import lru_cache
 
 from torch.utils.data import Dataset, DataLoader
 from sklearn import preprocessing as pp
-from torch_geometric.utils import to_dense_adj, k_hop_subgraph
 
-from src.data.utils import extract_from_archive, convert_edge_index_to_adjacency_map
+from src.data.utils import extract_from_archive
+from src.models.graph_utils import k_hop_subgraph_limit
 
 RATINGS_FILE_CSV = "ratings.csv"
 
@@ -18,12 +17,19 @@ MOVIE_LENS_1M_DATASET_RELATIVE_PATH = "ml-1m/ml-1m.tar.gz"
 MOVIE_LENS_10M_DATASET_RELATIVE_PATH = "ml-10m/ml-10m.tar.gz"
 
 # Move to external params
-NUM_K_HOPS = 1
+NUM_K_HOPS = 2
 
 
 class MovieLensDataset(Dataset):
-    def __init__(self, df, random_state=42):
+    def __init__(self, df,
+                 random_state=42,
+                 enable_subsampling=False,
+                 num_k_hops=2,
+                 hop_max_edges=1000):
         random.seed(random_state)
+        self.enable_subsampling = enable_subsampling
+        self.num_k_hops = num_k_hops
+        self.hop_max_edges = hop_max_edges
 
         # Unique user and items ids as numpy array
         self.pandas_data = df
@@ -61,7 +67,7 @@ class MovieLensDataset(Dataset):
             neg_item_idx + self.num_users)
 
     def k_hop_subgraph(self, user_idxs_tensor, num_hops, train_edge_index, relabel_nodes=False):
-        _, sub_edge_index, _, _ = k_hop_subgraph(user_idxs_tensor, num_hops, self.train_edge_index, relabel_nodes=False)
+        _, sub_edge_index, _, _ = k_hop_subgraph_limit(user_idxs_tensor, num_hops, self.train_edge_index, hop_max_edges = self.hop_max_edges)
         return sub_edge_index
 
     def __getitems__(self, indices):
@@ -71,7 +77,12 @@ class MovieLensDataset(Dataset):
         sample_interacted_items = self.interacted_items_by_user_idx.iloc[user_idxs]
         pos_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: random.choice(x)).values
         neg_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: self.sample_neg(x)).values
-        sub_edge_index = self.k_hop_subgraph(user_idxs_tensor, NUM_K_HOPS, self.train_edge_index)
+
+        if self.enable_subsampling:
+            sub_edge_index = self.k_hop_subgraph(user_idxs_tensor, NUM_K_HOPS, self.train_edge_index)
+        else:
+            sub_edge_index = self.train_edge_index
+
         return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
 
     def sample_neg(self, x):
@@ -82,9 +93,24 @@ class MovieLensDataset(Dataset):
 
 
 class MovieLensDataModule(LightningDataModule):
-    def __init__(self, dataset_path: str, sep='::', batch_size=32, random_state=42, split="simple"):
+    def __init__(self,
+                 dataset_path: str,
+                 sep='::',
+                 device="cpu",
+                 batch_size=32,
+                 random_state=42,
+                 split="simple",
+                 enable_subsampling=False,
+                 num_k_hops=2,
+                 hop_max_edges=1000
+                 ):
         super().__init__()
         self.batch_size = batch_size
+        self.random_state = random_state
+        self.enable_subsampling = enable_subsampling
+        self.num_k_hops = num_k_hops
+        self.hop_max_edges = hop_max_edges
+        self.device = device
 
         dataset_path = pathlib.Path(dataset_path)
         extract_from_archive(dataset_path, [RATINGS_FILE_CSV], dataset_path.parent)
@@ -138,18 +164,47 @@ class MovieLensDataModule(LightningDataModule):
 
     def setup(self):
         # Assign train/val datasets for use in dataloaders
-        self.train_dataset = MovieLensDataset(self.train_df)
-        self.val_dataset = MovieLensDataset(self.val_df)
-        self.test_dataset = MovieLensDataset(self.test_df)
+        self.train_dataset = MovieLensDataset(self.train_df,
+                                              enable_subsampling=self.enable_subsampling,
+                                              num_k_hops=self.num_k_hops,
+                                              hop_max_edges=self.hop_max_edges
+                                              )
+        self.val_dataset = MovieLensDataset(self.val_df,
+                                            enable_subsampling=self.enable_subsampling,
+                                            num_k_hops=self.num_k_hops,
+                                            hop_max_edges=self.hop_max_edges)
+
+        self.test_dataset = MovieLensDataset(self.test_df,
+                                             enable_subsampling=self.enable_subsampling,
+                                             num_k_hops=self.num_k_hops,
+                                             hop_max_edges=self.hop_max_edges)
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=11)
+        return DataLoader(self.train_dataset,
+                          batch_size=self.batch_size,
+                          collate_fn=self.collate_fn,
+                          pin_memory=False,
+                          shuffle=True,
+                          generator=torch.Generator(device=self.device)
+                          )
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+        return DataLoader(self.val_dataset,
+                          batch_size=self.batch_size,
+                          collate_fn=self.collate_fn,
+                          pin_memory=False,
+                          shuffle=True,
+                          generator=torch.Generator(device=self.device)
+                          )
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
+        return DataLoader(self.test_dataset,
+                          batch_size=self.batch_size,
+                          collate_fn=self.collate_fn,
+                          pin_memory=False,
+                          shuffle=True,
+                          generator=torch.Generator(device=self.device)
+                          )
 
     def collate_fn(self, batch):
         return batch

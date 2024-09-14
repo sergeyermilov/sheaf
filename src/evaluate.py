@@ -105,7 +105,7 @@ def main(device, artifact_id, artifact_dir):
 
     model = configs['model']
     dataset = configs['dataset']
-    params = json.loads(configs['params'].replace("'", "\""))
+    params = json.loads(configs['model_params'].replace("'", "\""))
     batch_size = configs['batch_size']
     epochs = configs['epochs']
     split = configs['split']
