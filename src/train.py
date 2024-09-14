@@ -51,21 +51,23 @@ DATASETS = {
 @click.option("--model", default="LightGCN", type=str)
 @click.option("--dataset", default="FACEBOOK", type=str)
 @click.option("--split", default="simple", type=click.Choice(['time', 'simple']))
-@click.option("--params", default="{}", type=str)
+@click.option("--dataset-params", default="{}", type=str)
+@click.option("--model-params", default="{}", type=str)
 @click.option("--seed", default=42, type=int)
 @click.option("--dataset-dir", default="data/", type=pathlib.Path)
 @click.option("--batch-size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
-def main(model, dataset, split, params, seed, dataset_dir, batch_size, epochs, device, artifact_dir):
+def main(model, dataset, split, dataset_params, model_params, seed, dataset_dir, batch_size, epochs, device, artifact_dir):
     artifact_params = dict(
         model=model,
         dataset=dataset,
         split=split,
         epochs=epochs,
         batch_size=batch_size,
-        params=params,
+        model_params=model_params,
+        dataset_params=dataset_params,
         seed=seed,
     )
 
@@ -77,7 +79,8 @@ def main(model, dataset, split, params, seed, dataset_dir, batch_size, epochs, d
     print(f"date= {datetime.datetime.now()}")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
-    print(f"params = {params}")
+    print(f"dataset-params = {dataset_params}")
+    print(f"model-params = {model_params}")
     print(f"split = {split}")
     print(f"dataset_dir = {dataset_dir}")
     print(f"seed = {seed}")
@@ -102,16 +105,18 @@ def main(model, dataset, split, params, seed, dataset_dir, batch_size, epochs, d
 
     model_class = MODELS[model]
     dataset_class, dataset_path = DATASETS[dataset]
+    dataset_class_partial = create_from_json_string(dataset_class, dataset_params)
 
     dataset_path = str(dataset_dir.joinpath(dataset_path))
-    ml_data_module = dataset_class(dataset_path, batch_size=batch_size, random_state=seed)
+
+    ml_data_module = dataset_class_partial(dataset_path, batch_size=batch_size, random_state=seed, device=device)
     ml_data_module.setup()
 
     serialize_dataset(artifact_dir.joinpath(f"data.pickle"), ml_data_module)
 
     train_dataloader = ml_data_module.train_dataloader()
 
-    model_class_partial = create_from_json_string(model_class, params)
+    model_class_partial = create_from_json_string(model_class, model_params)
     model_instance = model_class_partial(dataset=ml_data_module.train_dataset)
     trainer = Trainer(max_epochs=epochs, log_every_n_steps=1, logger=[
         CSVLogger(artifact_dir, name="train_logs"),
