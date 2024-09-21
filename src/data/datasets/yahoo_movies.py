@@ -54,6 +54,10 @@ class YahooMoviesDataset(Dataset):
             if neg_id not in x:
                 return neg_id
 
+    def get_num_nodes(self):
+        return self.num_users + self.num_items
+
+
 class YahooMoviesDataModule(LightningDataModule):
     def __init__(self, dataset_path: str, sep='\t', batch_size=32, random_state=42, split="simple"):
         super().__init__()

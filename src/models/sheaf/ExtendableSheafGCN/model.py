@@ -2,21 +2,27 @@ import torch
 import pytorch_lightning as pl
 
 from torch import nn
-from torch_geometric.utils import dropout_edge
+from torch_geometric.utils import to_dense_adj
 
 from src.losses.bpr import compute_bpr_loss
 from src.losses.sheaf import compute_loss_weight_paper
 from src.losses import Losses
 
-from .compute_layer import (
+
+from .operator_compute_layer.base import (
+    OperatorComputeLayer,
+    OperatorComputeLayerType,
     LayerCompositionType,
     SheafOperators,
-    OperatorComputeLayer,
-    GlobalOperatorComputeLayer,
-    SingleEntityOperatorComputeLayer,
-    SingleEntityDistinctOperatorComputeLayer,
-    PairedEntityOperatorComputeLayer,
-    OperatorComputeLayerType
+)
+from .operator_compute_layer.heterogeneous import (
+    HeterogeneousGlobalOperatorComputeLayer,
+    HeterogeneousSimpleFFNOperatorComputeLayer,
+)
+from .operator_compute_layer.homogenous import (
+    HomogenousGlobalOperatorComputeLayer,
+    HomogenousSimpleFFNOperatorComputeLayer,
+    HomogenousPairedFFNOperatorComputeLayer,
 )
 
 
@@ -207,7 +213,6 @@ class ExtendableSheafGCN(pl.LightningModule):
                  layer_types: list[str] = None,
                  losses: list[str] = None,
                  composition_type: str = LayerCompositionType.ADDITIVE,
-                 sample_share: float = 1.0,
                  operator_ffn_depth: int = 6,
                  operator_train_mode: str = OperatorComputeLayerTrainMode.SIMULTANEOUS,
                  epochs_per_operator: int = 30,
@@ -215,7 +220,7 @@ class ExtendableSheafGCN(pl.LightningModule):
         super(ExtendableSheafGCN, self).__init__()
 
         if layer_types is None:
-            layer_types = [OperatorComputeLayerType.LAYER_SINGLE_ENTITY_DISTINCT]
+            layer_types = [OperatorComputeLayerType.LAYER_HETERO_GLOBAL]
 
         if losses is None:
             self.losses = {Losses.BPR, Losses.DIFFUSION, Losses.ORTHOGONALITY, Losses.CONSISTENCY}
@@ -227,56 +232,72 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         self.dataset = dataset
         self.latent_dim = latent_dim
-        self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
-        self.num_nodes = dataset.num_items + dataset.num_users
+        self.embedding = nn.Embedding(dataset.get_num_nodes(), latent_dim)
         self.composition_type = composition_type
-        self.sample_share = sample_share
         self.operator_ffn_depth = operator_ffn_depth
         self.operator_train_mode = operator_train_mode
         self.epochs_per_operator = epochs_per_operator
 
-        # every layer is the same
-        self.sheaf_conv1 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
-        # self.sheaf_conv2 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
-        # self.sheaf_conv3 = ExtendableSheafGCNLayer(latent_dim, latent_dim, self.create_operator_layers(layer_types), self.operator_train_mode, self.epochs_per_operator)
+        self.sheaf_conv = ExtendableSheafGCNLayer(
+            dimx=latent_dim,
+            dimy=latent_dim,
+            operator_compute_layers=self.create_operator_layers(layer_types),
+            operator_compute_train_mode=self.operator_train_mode,
+            epochs_per_operator=self.epochs_per_operator
+        )
 
         self.edge_index = self.dataset.train_edge_index
-        self.adj = ExtendableSheafGCN.compute_adj_normalized(self.dataset.adjacency_matrix)
+
+        # adjacency matrix can be predefined for small datasets and be missing for large datasets,
+        # in this case it will be computed on forward pass
+        if hasattr(self.dataset, "adjacency_matrix"):
+            self.adjacency_matrix_norm = ExtendableSheafGCN.compute_adj_normalized(self.dataset.adjacency_matrix)
+        else:
+            self.adjacency_matrix_norm = None
+
         self.init_parameters()
         self.init_grad_clipping(grad_clip)
 
-    def forward_(self, edge_index):
+    def forward_(self, edge_index: torch.Tensor):
+        adjacency_matrix_norm = self.get_normalized_adjacency_matrix(edge_index)
         emb0 = self.embedding.weight
-        m_u0 = self.sheaf_conv1(self.adj, emb0, edge_index, False)
-        m_u1 = self.sheaf_conv1(self.adj, m_u0, edge_index, False)
-        out, diff_loss, cons_loss, orth_loss = self.sheaf_conv1(self.adj, m_u1, edge_index, True)
+        m_u0 = self.sheaf_conv(adjacency_matrix_norm, emb0, edge_index, False)
+        m_u1 = self.sheaf_conv(adjacency_matrix_norm, m_u0, edge_index, False)
+        out, diff_loss, cons_loss, orth_loss = self.sheaf_conv(adjacency_matrix_norm, m_u1, edge_index, True)
 
         return out, diff_loss, cons_loss, orth_loss
 
-    def forward(self, edge_index):
+    def forward(self, edge_index: torch.Tensor):
+        adjacency_matrix_norm = self.get_normalized_adjacency_matrix(edge_index)
         emb0 = self.embedding.weight
-        m_u0 = self.sheaf_conv1(self.adj, emb0, edge_index)
-        m_u1 = self.sheaf_conv1(self.adj, m_u0, edge_index)
-        out = self.sheaf_conv1(self.adj, m_u1, edge_index)
+        m_u0 = self.sheaf_conv(adjacency_matrix_norm, emb0, edge_index)
+        m_u1 = self.sheaf_conv(adjacency_matrix_norm, m_u0, edge_index)
+        out = self.sheaf_conv(adjacency_matrix_norm, m_u1, edge_index)
 
         return emb0, out
 
+    def get_normalized_adjacency_matrix(self, edge_index: torch.Tensor):
+        if self.adjacency_matrix_norm is None:
+            adjacency_matrix = torch.squeeze(to_dense_adj(edge_index))
+            return ExtendableSheafGCN.compute_adj_normalized(adjacency_matrix)
+
+        return self.adjacency_matrix_norm
+
     def training_step(self, batch, batch_idx):
-        users, pos_items, neg_items = batch
-        if self.sample_share == 1.0:
+        if len(batch) == 3:
+            start_nodes, pos_items, neg_items = batch
             edge_index = self.edge_index
+        elif len(batch) == 4:
+            start_nodes, pos_items, neg_items, edge_index = batch
         else:
-            edge_index, _ = dropout_edge(
-                self.edge_index,
-                p=self.sample_share
-            )
+            raise Exception("batch is of unknown size")
 
         self.update_epoch()
 
-        embs, users_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(users, pos_items, neg_items, edge_index)
-        w_diff, w_orth, w_cons, w_bpr = compute_loss_weight_paper(loss_diff, loss_orth, loss_cons, len(users))
+        embs, start_nodes_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(start_nodes, pos_items, neg_items, edge_index)
+        w_diff, w_orth, w_cons, w_bpr = compute_loss_weight_paper(loss_diff, loss_orth, loss_cons, len(start_nodes))
 
-        bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
+        bpr_loss = compute_bpr_loss(start_nodes, start_nodes_emb, pos_emb, neg_emb)
         loss = w_diff * loss_diff + w_bpr * bpr_loss
 
         if Losses.CONSISTENCY in self.losses:
@@ -298,12 +319,12 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         return loss
 
-    def encode_minibatch(self, users, pos_items, neg_items, edge_index):
+    def encode_minibatch(self, start_nodes, pos_items, neg_items, edge_index):
         out, diff_loss, cons_loss, orth_loss = self.forward_(edge_index)
 
         return (
             out,
-            out[users],
+            out[start_nodes],
             out[pos_items],
             out[neg_items],
             diff_loss,
@@ -322,38 +343,65 @@ class ExtendableSheafGCN(pl.LightningModule):
     def create_operator_layers(self, layer_types: list[str]):
         layers = list()
 
-        params = {
-            "dimx": self.latent_dim,
-            "dimy": self.latent_dim,
-            "user_indices": list(range(self.dataset.num_users)),
-            "item_indices": list(range(self.dataset.num_users, self.dataset.num_users + self.dataset.num_items)),
-            "composition_type": self.composition_type,
-        }
-
-        def make_layer(layer_type: str):
-            match layer_type:
-                case OperatorComputeLayerType.LAYER_GLOBAL:
-                    return GlobalOperatorComputeLayer(**params)
-                case OperatorComputeLayerType.LAYER_SINGLE_ENTITY:
-                    params.update({"depth": self.operator_ffn_depth})
-                    return SingleEntityOperatorComputeLayer(**params, nsmat=64)
-                case OperatorComputeLayerType.LAYER_PAIRED_ENTITIES:
-                    params.update({"depth": self.operator_ffn_depth})
-                    return PairedEntityOperatorComputeLayer(**params, nsmat=64)
-                case OperatorComputeLayerType.LAYER_SINGLE_ENTITY_DISTINCT:
-                    params.update({"depth": self.operator_ffn_depth})
-                    return SingleEntityDistinctOperatorComputeLayer(**params, nsmat=64)
+        params = dict(
+            dim_in=self.latent_dim,
+            dim_out=self.latent_dim,
+            composition_type=self.composition_type,
+        )
 
         for layer_type in layer_types:
-            layers.append(make_layer(layer_type))
+            layer = (self.make_heterogeneous_layer(layer_type, **params) or
+                     self.make_homogenous_layer(layer_type, **params))
+            if layer is None:
+                raise Exception("unknown layer type.")
+
+            layers.append(layer)
 
         return layers
 
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+    def make_heterogeneous_layer(self, layer_type: str, **params):
+        hetero_params = dict(
+            user_indices=list(range(self.dataset.num_users)),
+            item_indices=list(range(self.dataset.num_users, self.dataset.num_users + self.dataset.num_items)),
+            **params
+        )
+
+        match layer_type:
+            case OperatorComputeLayerType.LAYER_HETERO_GLOBAL:
+                return HeterogeneousGlobalOperatorComputeLayer(**hetero_params)
+            case OperatorComputeLayerType.LAYER_HETERO_SIMPLE_FFN:
+                return HeterogeneousSimpleFFNOperatorComputeLayer(**dict(
+                    depth=self.operator_ffn_depth,
+                    nsmat=64,
+                    **hetero_params,
+                ))
+
+        return None
+
+    def make_homogenous_layer(self, layer_type: str, **params):
+        match layer_type:
+            case OperatorComputeLayerType.LAYER_HOMO_GLOBAL:
+                return HomogenousGlobalOperatorComputeLayer(**params)
+            case OperatorComputeLayerType.LAYER_HOMO_SIMPLE_FFN:
+                return HomogenousSimpleFFNOperatorComputeLayer(
+                    depth=self.operator_ffn_depth,
+                    nsmat=64,
+                    **params
+                )
+            case OperatorComputeLayerType.LAYER_HOMO_PAIRED_FFN:
+                return HomogenousPairedFFNOperatorComputeLayer(
+                    depth=self.operator_ffn_depth,
+                    nsmat=64,
+                    **params
+                )
+
+        return None
 
     def update_epoch(self):
-        self.sheaf_conv1.set_current_epoch(self.current_epoch)
+        self.sheaf_conv.set_current_epoch(self.current_epoch)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.001)
 
     def init_grad_clipping(self, clip_value):
         for param in self.parameters():
@@ -365,4 +413,4 @@ class ExtendableSheafGCN(pl.LightningModule):
 
     def init_parameters(self):
         nn.init.normal_(self.embedding.weight, std=0.1)
-        self.sheaf_conv1.init_parameters()
+        self.sheaf_conv.init_parameters()

@@ -99,16 +99,14 @@ def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_ev
 def main(device, artifact_id, artifact_dir):
     artifact_dir = artifact_dir.joinpath(artifact_id)
 
-    configs = None
     with open(artifact_dir.joinpath("config.json"), "r") as fhandle:
         configs = json.load(fhandle)
 
     model = configs['model']
     dataset = configs['dataset']
-    params = json.loads(configs['model_params'].replace("'", "\""))
-    batch_size = configs['batch_size']
+    model_params = json.loads(configs['model_params'].replace("'", "\""))
+    dataset_params = json.loads(configs['dataset_params'].replace("'", "\""))
     epochs = configs['epochs']
-    split = configs['split']
 
     print("------------------------------------------------")
     print("Evaluate model with the following configuration:")
@@ -116,12 +114,11 @@ def main(device, artifact_id, artifact_dir):
     print(f"date= {datetime.datetime.now()}")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
-    print(f"params = {params}")
-    print(f"batch_size = {batch_size}")
+    print(f"model-params = {model_params}")
+    print(f"dataset-params = {dataset_params}")
     print(f"epochs = {epochs}")
     print(f"device = {device}")
-    print(f"artifact_dir = {artifact_dir}")
-    print(f"split = {split}")
+    print(f"artifact-dir = {artifact_dir}")
     print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
@@ -142,7 +139,7 @@ def main(device, artifact_id, artifact_dir):
     test_dataset = ml_data_module.test_dataset
 
     model_instance = MODELS[model].load_from_checkpoint(
-        artifact_dir.joinpath(f"model.pickle"), dataset=train_dataset, **params
+        artifact_dir.joinpath(f"model.pickle"), dataset=train_dataset, **model_params
     )
     model_instance.eval()
     model_instance = model_instance.to(device)
@@ -168,7 +165,6 @@ def main(device, artifact_id, artifact_dir):
     res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
 
     res.to_csv(artifact_dir.joinpath(f"report.csv"), index=False)
-
 
     brief = dict()
     for c in itertools.chain(metrics_5, metrics_10, metrics_20, metrics_50):
