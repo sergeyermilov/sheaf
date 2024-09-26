@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from .base import OperatorComputeLayer, SheafOperators, LayerCompositionType, LayerPriority
+from .base import OperatorComputeLayer, SheafOperators, LayerCompositionType, LayerPriority, is_zero_matrix
 from .utils import make_fc_transform
 
 
@@ -43,6 +43,16 @@ class HeterogeneousGlobalOperatorComputeLayer(HeterogeneousOperatorComputeLayer)
         nn.init.xavier_uniform(self.user_operator.data)
         nn.init.xavier_uniform(self.item_operator.data)
 
+    def is_denoisable(self):
+        return True
+
+    def compute_for_denoise(self,
+                            embeddings: torch.Tensor,
+                            operators: torch.Tensor) -> torch.Tensor:
+        operators[self.user_indices, ...] += self.user_operator
+        operators[self.item_indices, ...] += self.item_operator
+        return operators
+
 
 class HeterogeneousSimpleFFNOperatorComputeLayer(HeterogeneousOperatorComputeLayer):
     def __init__(self, dim_in: int, dim_out: int, user_indices: list[int], item_indices: list[int], composition_type: str, nsmat: int = 64, depth: int = 6):
@@ -66,16 +76,18 @@ class HeterogeneousSimpleFFNOperatorComputeLayer(HeterogeneousOperatorComputeLay
         v_user_mask = torch.isin(v_indices, self.user_indices)
         v_item_mask = torch.isin(v_indices, self.item_indices)
 
-        if self.composition_type == LayerCompositionType.ADDITIVE or torch.allclose(embeddings.sum(), torch.tensor(0)):
+        if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
             operators.operator_uv[u_user_mask, ...] += operator_by_embedding_user[u_indices[u_user_mask], ...]
             operators.operator_uv[u_item_mask, ...] += operator_by_embedding_item[u_indices[u_item_mask], ...]
             operators.operator_vu[v_user_mask, ...] += operator_by_embedding_user[v_indices[v_user_mask], ...]
             operators.operator_vu[v_item_mask, ...] += operator_by_embedding_item[v_indices[v_item_mask], ...]
-        else:
+        elif self.composition_type == LayerCompositionType.MULTIPLICATIVE:
             operators.operator_uv[u_user_mask, ...] = torch.bmm(operator_by_embedding_user[u_indices[u_user_mask], ...], operators.operator_uv[u_user_mask, ...])
             operators.operator_uv[u_item_mask, ...] = torch.bmm(operator_by_embedding_item[u_indices[u_item_mask], ...], operators.operator_uv[u_item_mask, ...])
             operators.operator_vu[v_user_mask, ...] = torch.bmm(operator_by_embedding_user[v_indices[v_user_mask], ...], operators.operator_vu[v_user_mask, ...])
             operators.operator_vu[v_item_mask, ...] = torch.bmm(operator_by_embedding_item[v_indices[v_item_mask], ...], operators.operator_vu[v_item_mask, ...])
+        else:
+            raise LayerCompositionType.IncorrectCompositionException()
 
         return operators
 
@@ -86,3 +98,22 @@ class HeterogeneousSimpleFFNOperatorComputeLayer(HeterogeneousOperatorComputeLay
         self.fc_smat_user.apply(OperatorComputeLayer.init_layer)
         self.fc_smat_item.apply(OperatorComputeLayer.init_layer)
 
+    def is_denoisable(self):
+        return True
+
+    def compute_for_denoise(self,
+                            embeddings: torch.Tensor,
+                            operators: torch.Tensor) -> torch.Tensor:
+        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings), (-1, self.dim_out, self.dim_in))
+        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings), (-1, self.dim_out, self.dim_in))
+
+        if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
+            operators[self.user_indices, ...] += operator_by_embedding_user[self.user_indices, ...]
+            operators[self.item_indices, ...] += operator_by_embedding_item[self.item_indices, ...]
+        elif self.composition_type == LayerCompositionType.MULTIPLICATIVE:
+            operators[self.user_indices, ...] = torch.bmm(operators[self.user_indices, ...], operator_by_embedding_user[self.user_indices, ...])
+            operators[self.item_indices, ...] = torch.bmm(operators[self.item_indices, ...], operator_by_embedding_user[self.item_indices, ...])
+        else:
+            raise LayerCompositionType.IncorrectCompositionException()
+
+        return operators

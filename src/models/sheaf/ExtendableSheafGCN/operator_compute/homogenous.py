@@ -5,7 +5,7 @@ from .base import (
     OperatorComputeLayer,
     SheafOperators,
     LayerCompositionType,
-    LayerPriority,
+    LayerPriority, is_zero_matrix,
 )
 from .utils import make_fc_transform
 
@@ -32,12 +32,21 @@ class HomogenousGlobalOperatorComputeLayer(OperatorComputeLayer):
     def init_parameters(self):
         nn.init.xavier_uniform(self.operator.data)
 
+    def is_denoisable(self):
+        return True
+
+    def compute_for_denoise(self,
+                            embeddings: torch.Tensor,
+                            operators: torch.Tensor) -> torch.Tensor:
+        # it is always additive because this layer is the first layer in composition
+        operators[:, ...] += self.operator
+        return operators
+
 
 class HomogenousSimpleFFNOperatorComputeLayer(OperatorComputeLayer):
     def __init__(self, dim_in: int, dim_out: int, composition_type: str, nsmat: int = 64, depth: int = 6):
         super().__init__(dim_in, dim_out, composition_type)
 
-        # maybe create two selarate FFNs for user and item nodes?
         self.fc_smat = make_fc_transform(self.dim_in, (self.dim_in, self.dim_out), nsmat, depth=depth)
 
     def compute(self,
@@ -48,12 +57,14 @@ class HomogenousSimpleFFNOperatorComputeLayer(OperatorComputeLayer):
 
         operator_by_embedding = torch.reshape(self.fc_smat(embeddings), (-1, self.dim_out, self.dim_in))
 
-        if self.composition_type == LayerCompositionType.ADDITIVE or torch.allclose(embeddings.sum(), torch.tensor(0)):
+        if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
             operators.operator_uv += operator_by_embedding[u_indices, ...]
             operators.operator_vu += operator_by_embedding[v_indices, ...]
-        else:
+        elif self.composition_type == LayerCompositionType.MULTIPLICATIVE:
             operators.operator_uv = torch.bmm(operator_by_embedding[u_indices, ...], operators.operator_uv)
             operators.operator_vu = torch.bmm(operator_by_embedding[v_indices, ...], operators.operator_vu)
+        else:
+            raise Exception("unknown composition type")
 
         return operators
 
@@ -62,6 +73,22 @@ class HomogenousSimpleFFNOperatorComputeLayer(OperatorComputeLayer):
 
     def init_parameters(self):
         self.fc_smat.apply(OperatorComputeLayer.init_layer)
+
+    def is_denoisable(self):
+        return True
+
+    def compute_for_denoise(self,
+                            embeddings: torch.Tensor,
+                            operators: torch.Tensor) -> torch.Tensor:
+        operator_by_embedding = torch.reshape(self.fc_smat(embeddings), (-1, self.dim_out, self.dim_in))
+        if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
+            operators = operators + operator_by_embedding
+        elif self.composition_type == LayerCompositionType.MULTIPLICATIVE:
+            operators = torch.bmm(operators, operator_by_embedding)
+        else:
+            raise LayerCompositionType.IncorrectCompositionException()
+
+        return operators
 
 
 class HomogenousPairedFFNOperatorComputeLayer(OperatorComputeLayer):
@@ -89,12 +116,14 @@ class HomogenousPairedFFNOperatorComputeLayer(OperatorComputeLayer):
         operator_uv = torch.reshape(self.fc_smat(combined_embeddings_uv), (-1, self.dim_out, self.dim_in))
         operator_vu = torch.reshape(self.fc_smat(combined_embeddings_vu), (-1, self.dim_out, self.dim_in))
 
-        if self.composition_type == LayerCompositionType.ADDITIVE or torch.allclose(embeddings.sum(), torch.tensor(0)):
+        if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
             operators.operator_uv += operator_uv
             operators.operator_vu += operator_vu
-        else:
+        elif self.composition_type == LayerCompositionType.MULTIPLICATIVE:
             operators.operator_uv = torch.bmm(operator_uv, operators.operator_uv)
             operators.operator_vu = torch.bmm(operator_vu, operators.operator_vu)
+        else:
+            raise LayerCompositionType.IncorrectCompositionException()
 
         return operators
 

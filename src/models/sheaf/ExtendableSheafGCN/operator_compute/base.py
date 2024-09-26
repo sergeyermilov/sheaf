@@ -23,6 +23,25 @@ class OperatorComputeLayerType:
 
         assert layers and all([loss in valid_layers for loss in layers]), "none or invalid layers"
 
+    @staticmethod
+    def is_homo(layers):
+        valid_layers = {
+            OperatorComputeLayerType.LAYER_HOMO_GLOBAL,
+            OperatorComputeLayerType.LAYER_HOMO_SIMPLE_FFN,
+            OperatorComputeLayerType.LAYER_HOMO_PAIRED_FFN,
+        }
+
+        assert layers and all([loss in valid_layers for loss in layers]), "no homo"
+
+    @staticmethod
+    def is_hetero(layers):
+        valid_layers = {
+            OperatorComputeLayerType.LAYER_HETERO_GLOBAL,
+            OperatorComputeLayerType.LAYER_HETERO_SIMPLE_FFN
+        }
+
+        assert layers and all([loss in valid_layers for loss in layers]), "no hetero"
+
 
 class LayerCompositionType:
     MULTIPLICATIVE = "mult"
@@ -30,10 +49,15 @@ class LayerCompositionType:
 
     @staticmethod
     def validate(composition_type: str):
-        assert composition_type in {
+        if composition_type not in {
             LayerCompositionType.MULTIPLICATIVE,
             LayerCompositionType.ADDITIVE
-        }, "incorrect composition type"
+        }:
+            raise LayerCompositionType.IncorrectCompositionException()
+
+    class IncorrectCompositionException(Exception):
+        def __init__(self):
+            super().__init__("Incorrect composition")
 
 
 class LayerPriority:
@@ -90,6 +114,16 @@ class OperatorComputeLayer(nn.Module):
     def priority(self):
         raise NotImplementedError()
 
+    # Use \hat{x} = A^T * A * x instead of message passing,
+    # only available for no-/single- feature computers
+    def compute_for_denoise(self,
+                            embeddings: torch.Tensor,
+                            operators: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError()
+
+    def is_denoisable(self):
+        return False
+
     @staticmethod
     def init_layer(layer: nn.Module):
         if layer is nn.Linear:
@@ -99,3 +133,6 @@ class OperatorComputeLayer(nn.Module):
     def assert_indices(indices: torch.Tensor, embeddings: torch.Tensor):
         assert torch.max(indices) < embeddings.shape[0], "invalid indices"
 
+
+def is_zero_matrix(embeddings: torch.Tensor):
+    return torch.allclose(embeddings.sum(), torch.tensor(0))
