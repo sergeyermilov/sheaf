@@ -7,6 +7,13 @@ LATENT_DIMS=$4
 BATCH_SIZE=$5
 SAMPLES=$6
 
+NUM_HOPS=$8 # 2
+HOP_MAX_EDGES=$9 #[$BATCH_SIZE,$BATCH_SIZE*4,$BATCH_SIZE*8]
+
+ENABLE_SUBSAMPLING_CMD=""
+
+[[ $NUM_HOPS && $HOP_MAX_EDGES ]] && ENABLE_SUBSAMPLING_CMD=",'enable_subsampling':true,'num_k_hops':$NUM_HOPS,'hop_max_edges':$HOP_MAX_EDGES"
+
 echo "DEVICE = $DEVICE"
 echo "DATASET = $DATASET"
 echo "EPOCHS = $EPOCHS"
@@ -21,7 +28,7 @@ for SEED in $(seq 1 $SAMPLES); do
   for LAYER in "${LAYER_TYPES[@]}"; do
     python -m src.train \
       --model ExtendableSheafGCN \
-      --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE}" \
+      --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE}$ENABLE_SUBSAMPLING_CMD" \
       --model-params "{'latent_dim':$LATENT_DIMS,'layer_types':$LAYER,'epochs_per_operator':20}" \
       --dataset $DATASET \
       --device $DEVICE \
