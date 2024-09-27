@@ -22,7 +22,7 @@ for SEED in $(seq 1 $SAMPLES); do
     python -m src.train \
       --model ExtendableSheafGCN \
       --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE}" \
-      --model-params "{'latent_dim':$LATENT_DIMS,'layer_types':$LAYER,'epochs_per_operator':20}" \
+      --model-params "{'latent_dim':$LATENT_DIMS,'layer_types':$LAYER,'epochs_per_operator':20,'losses':['bpr','diff','orth','cons'],'grad_clip':0.5}" \
       --dataset $DATASET \
       --device $DEVICE \
       --epochs $EPOCHS \
