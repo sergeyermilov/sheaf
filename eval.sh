@@ -5,6 +5,7 @@ DATASET=$2
 EPOCHS=$3
 LATENT_DIMS=$4
 BATCH_SIZE=$5
+SAMPLES=$6
 
 echo "DEVICE = $DEVICE"
 echo "DATASET = $DATASET"
@@ -30,7 +31,7 @@ ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}_$(date +%s)"
 
 LAYER_TYPES=("['hetero_global']" "['homo_global']" "['homo_simple_ffn']" "['hetero_simple_ffn']" "['hetero_global','hetero_simple_ffn']" "['homo_global','homo_simple_ffn']")
 
-for SEED in {1..8}; do
+for SEED in {1..$SAMPLES}; do
   for LAYER in "${LAYER_TYPES[@]}"; do
     python -m src.train \
       --model ExtendableSheafGCN \
