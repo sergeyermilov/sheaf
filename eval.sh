@@ -26,7 +26,6 @@ LAYER_TYPES=("['hetero_global']", "['homo_global']", "['homo_simple_ffn']", "['h
 for SEED in {1..8}; do
   for LAYER in LAYER_TYPES; do
     python -m src.train \
-      --seed $SEED \
       --batch-size $BATCH_SIZE \
       --model ExtendableSheafGCN \
       --dataset-params "{'random_state':$SEED}" \
