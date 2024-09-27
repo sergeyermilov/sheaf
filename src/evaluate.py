@@ -107,6 +107,7 @@ def main(device, artifact_id, artifact_dir):
     model_params = json.loads(configs['model_params'].replace("'", "\""))
     dataset_params = json.loads(configs['dataset_params'].replace("'", "\""))
     epochs = configs['epochs']
+    denoise = configs['denoise']
 
     print("------------------------------------------------")
     print("Evaluate model with the following configuration:")
@@ -119,6 +120,7 @@ def main(device, artifact_id, artifact_dir):
     print(f"epochs = {epochs}")
     print(f"device = {device}")
     print(f"artifact-dir = {artifact_dir}")
+    print(f"denoise = {denoise}")
     print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
@@ -155,7 +157,11 @@ def main(device, artifact_id, artifact_dir):
 
     if not is_alternate_evaluation:
         with torch.no_grad():
-            _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
+            if denoise:
+                embeddings = model_instance.get_denoised_embeddings()
+            else:
+                _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
+
             user_embeddings, item_embeddings = torch.split(embeddings,
                                                            (train_dataset.num_users, train_dataset.num_items))
 

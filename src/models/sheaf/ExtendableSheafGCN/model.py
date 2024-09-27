@@ -94,6 +94,13 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         return out, diff_loss, cons_loss, orth_loss
 
+    def is_denoisable(self):
+        return self.sheaf_conv.is_denoisable()
+
+    def get_denoised_embeddings(self):
+        emb0 = self.embedding.weight
+        return self.sheaf_conv.denoise(emb0)
+
     def forward(self, edge_index: torch.Tensor):
         adjacency_matrix_norm = self.get_normalized_adjacency_matrix(edge_index)
         emb0 = self.embedding.weight

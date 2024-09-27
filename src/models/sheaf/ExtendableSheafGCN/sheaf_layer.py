@@ -137,19 +137,23 @@ class ExtendableSheafGCNLayer(nn.Module):
     # Use \hat{x} = A^T * A * x instead of message passing,
     # only available for no-/single- feature computers
     def denoise(self, embeddings: torch.Tensor) -> torch.Tensor:
-        operators = torch.zeros((embeddings.shape[1], self.dimy, self.dimx), requires_grad=False),
-
+        operators = torch.zeros((embeddings.shape[0], self.dimy, self.dimx), requires_grad=False)
         for layer_ix, operator_compute_layer in enumerate(sorted(self.operator_compute_layers, key=lambda x: x.priority())):
             with torch.inference_mode():
                 if not operator_compute_layer.is_denoisable():
-                    raise Exception(f"operator {operator_compute_layer} is not denoisable")
-
-                operators = operator_compute_layer.compute_for_denoise(operators, embeddings)
+                    raise Exception(f"operator {operator_compute_layer} is not denoisable.")
+                operators = operator_compute_layer.compute_for_denoise(embeddings, operators)
 
         A = operators
         A_t = torch.reshape(A, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
         D = torch.bmm(A_t, A) # denoise operator
-        return torch.bmm(D, embeddings)
+        denoised_embeddings = torch.bmm(D, embeddings.unsqueeze(-1))
+
+        # remove extra redundant dimension
+        return denoised_embeddings.squeeze(-1)
+
+    def is_denoisable(self):
+        return all(layer.is_denoisable() for layer in self.operator_compute_layers)
 
     def forward(self, adj_matrix: torch.Tensor, embeddings: torch.Tensor, edge_index: torch.Tensor, compute_losses: bool = False):
         u_indices = edge_index[0, :]

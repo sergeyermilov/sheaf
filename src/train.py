@@ -56,13 +56,15 @@ DATASETS = {
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
-def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, device, artifact_dir):
+@click.option("--denoise", is_flag=True)
+def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, device, artifact_dir, denoise):
     artifact_params = dict(
         model=model,
         dataset=dataset,
         epochs=epochs,
         model_params=model_params,
         dataset_params=dataset_params,
+        denoise=denoise,
     )
 
     artifact_id = compute_artifact_id(length=12, **artifact_params)
@@ -80,6 +82,7 @@ def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, devi
     print(f"device = {device}")
     print(f"artifact-dir = {artifact_dir}")
     print(f"artifact-id = {artifact_id}")
+    print(f"denoise = {denoise}")
     print("-----------------------------------------------")
 
     artifact_dir = artifact_dir.joinpath(artifact_id)
@@ -107,6 +110,14 @@ def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, devi
 
     model_class_partial = create_from_json_string(model_class, model_params)
     model_instance = model_class_partial(dataset=ml_data_module.train_dataset)
+
+    if denoise:
+        if not hasattr(model_instance, "is_denoisable"):
+            raise Exception("Model is not denoisable")
+
+        if not model_instance.is_denoisable():
+            raise Exception("Current configuration is not denoisable")
+
     trainer = Trainer(max_epochs=epochs, log_every_n_steps=1, logger=[
         CSVLogger(artifact_dir, name="train_logs"),
         TensorBoardLogger(artifact_dir, name="train_tb")

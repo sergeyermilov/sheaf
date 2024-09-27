@@ -59,7 +59,7 @@ class FacebookDataset(Dataset):
 
 
 class FacebookDataModule(LightningDataModule):
-    def __init__(self, dataset_path: str, sep='\t', batch_size=32, random_state=42, split="simple"):
+    def __init__(self, dataset_path: str, sep='\t', batch_size=32, random_state=42, split="simple", device="cpu"):
         super().__init__()
 
         if split != "simple":
