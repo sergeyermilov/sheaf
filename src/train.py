@@ -50,25 +50,21 @@ DATASETS = {
 @click.command()
 @click.option("--model", default="LightGCN", type=str)
 @click.option("--dataset", default="FACEBOOK", type=str)
-@click.option("--split", default="simple", type=click.Choice(['time', 'simple']))
 @click.option("--dataset-params", default="{}", type=str)
 @click.option("--model-params", default="{}", type=str)
-@click.option("--seed", default=42, type=int)
 @click.option("--dataset-dir", default="data/", type=pathlib.Path)
-@click.option("--batch-size", default=1024, type=int)
 @click.option("--epochs", default=20, type=int)
 @click.option("--device", default="cuda", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
-def main(model, dataset, split, dataset_params, model_params, seed, dataset_dir, batch_size, epochs, device, artifact_dir):
+@click.option("--denoise", is_flag=True)
+def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, device, artifact_dir, denoise):
     artifact_params = dict(
         model=model,
         dataset=dataset,
-        split=split,
         epochs=epochs,
-        batch_size=batch_size,
         model_params=model_params,
         dataset_params=dataset_params,
-        seed=seed,
+        denoise=denoise,
     )
 
     artifact_id = compute_artifact_id(length=12, **artifact_params)
@@ -81,14 +77,12 @@ def main(model, dataset, split, dataset_params, model_params, seed, dataset_dir,
     print(f"dataset = {dataset}")
     print(f"dataset-params = {dataset_params}")
     print(f"model-params = {model_params}")
-    print(f"split = {split}")
-    print(f"dataset_dir = {dataset_dir}")
-    print(f"seed = {seed}")
-    print(f"batch_size = {batch_size}")
+    print(f"dataset-dir = {dataset_dir}")
     print(f"epochs = {epochs}")
     print(f"device = {device}")
-    print(f"artifact_dir = {artifact_dir}")
-    print(f"artifact_id = {artifact_id}")
+    print(f"artifact-dir = {artifact_dir}")
+    print(f"artifact-id = {artifact_id}")
+    print(f"denoise = {denoise}")
     print("-----------------------------------------------")
 
     artifact_dir = artifact_dir.joinpath(artifact_id)
@@ -107,9 +101,7 @@ def main(model, dataset, split, dataset_params, model_params, seed, dataset_dir,
     dataset_class, dataset_path = DATASETS[dataset]
     dataset_class_partial = create_from_json_string(dataset_class, dataset_params)
 
-    dataset_path = str(dataset_dir.joinpath(dataset_path))
-
-    ml_data_module = dataset_class_partial(dataset_path, batch_size=batch_size, random_state=seed, device=device)
+    ml_data_module = dataset_class_partial(str(dataset_dir.joinpath(dataset_path)), device=device)
     ml_data_module.setup()
 
     serialize_dataset(artifact_dir.joinpath(f"data.pickle"), ml_data_module)
@@ -118,6 +110,14 @@ def main(model, dataset, split, dataset_params, model_params, seed, dataset_dir,
 
     model_class_partial = create_from_json_string(model_class, model_params)
     model_instance = model_class_partial(dataset=ml_data_module.train_dataset)
+
+    if denoise:
+        if not hasattr(model_instance, "is_denoisable"):
+            raise Exception("Model is not denoisable")
+
+        if not model_instance.is_denoisable():
+            raise Exception("Current configuration is not denoisable")
+
     trainer = Trainer(max_epochs=epochs, log_every_n_steps=1, logger=[
         CSVLogger(artifact_dir, name="train_logs"),
         TensorBoardLogger(artifact_dir, name="train_tb")
