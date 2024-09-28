@@ -15,7 +15,7 @@ class TestSheafConvLayer(TestCase):
 
         edge_index = torch.tensor([[0, 1, 1, 2, 2, 3],
                                    [1, 0, 2, 1, 3, 2]])
-        conv = SheafConvLayer(4, edge_index)
+        conv = SheafConvLayer(4)
         print(conv.compute_left_right_map_index(edge_index))
 
     def test_predict_restriction_maps(self):
@@ -27,6 +27,6 @@ class TestSheafConvLayer(TestCase):
         edge_index = torch.tensor([[0, 1, 1, 2, 2, 3],
                                    [1, 0, 2, 1, 3, 2]])
 
-        conv = SheafConvLayer(4, edge_index)
+        conv = SheafConvLayer(4)
         maps = conv.predict_restriction_maps(x, edge_index)
         print(conv.build_laplacian(x, maps, edge_index))
