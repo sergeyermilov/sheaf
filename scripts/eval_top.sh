@@ -13,7 +13,7 @@ echo "EPOCHS = $EPOCHS"
 echo "LATENT_DIMS = $LATENT_DIMS"
 echo "BATCH_SIZE = $BATCH_SIZE"
 
-ARTIFACT_DIR="./BEST_${DATASET}_${EPOCHS}_$(date +%s)"
+ARTIFACT_DIR="./TOP_${DATASET}_${EPOCHS}_$(date +%s)"
 
 for SEED in $(seq 1 $SAMPLES); do
   python -m src.train --model TopKPopularity --dataset-params "{'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
