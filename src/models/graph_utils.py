@@ -64,3 +64,11 @@ def k_hop_subgraph_limit(
     edge_index_all_hops = edge_index[:, edge_mask_subsets]
 
     return edge_index_all_hops, edge_mask_subsets
+
+
+def compute_adj_normalized(adjacency_matrix):
+    degree = adjacency_matrix.sum(dim=1)
+    degree_inv_sqrt = torch.pow(degree, -0.5)
+    degree_inv_sqrt[torch.isinf(degree_inv_sqrt)] = 0
+    diag_degree_inv_sqrt = torch.diag(degree_inv_sqrt)
+    return diag_degree_inv_sqrt @ adjacency_matrix @ diag_degree_inv_sqrt
