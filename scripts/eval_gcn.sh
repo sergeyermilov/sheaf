@@ -32,9 +32,9 @@ ARTIFACT_DIR="./GCN_${DATASET}_${EPOCHS}_$(date +%s)"
 for SEED in $(seq 1 $SAMPLES); do
 #  python -m src.train --model TopKPopularity --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 #  python -m src.train --model EASE --model-params "{'lambda_reg':250}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model GAT --model-params "{'latent_dim':$LATENT_DIMS,'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model SheafGCN --model-params "{'latent_dim':$LATENT_DIMS,'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model LightGCN --model-params "{'latent_dim':$LATENT_DIMS,'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model GAT --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model SheafGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model LightGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 done;
 
 
