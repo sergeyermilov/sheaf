@@ -92,6 +92,7 @@ class SheafGCN(pl.LightningModule):
         num_nodes = dataset.num_items + dataset.num_users
         self.conv1 = SheafConvLayer(num_nodes, latent_dim)
         self.conv2 = SheafConvLayer(num_nodes, latent_dim)
+        self.edge_index = self.dataset.train_edge_index
 
         self.init_parameters()
 
