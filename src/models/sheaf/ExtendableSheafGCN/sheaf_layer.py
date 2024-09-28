@@ -145,10 +145,9 @@ class ExtendableSheafGCNLayer(nn.Module):
                 operators = operator_compute_layer.compute_for_denoise(embeddings, operators)
 
         A = operators
-        A_t = torch.reshape(A, (-1, self.dimy, self.dimx)).swapaxes(-1, -2)  # A(u, v)^T
+        A_t = A.swapaxes(-1, -2)  # A(u, v)^T
         D = torch.bmm(A_t, A) # denoise operator
         denoised_embeddings = torch.bmm(D, embeddings.unsqueeze(-1))
-
         # remove extra redundant dimension
         return denoised_embeddings.squeeze(-1)
 
