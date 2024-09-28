@@ -30,7 +30,7 @@ for SEED in $(seq 1 $SAMPLES); do
   for LAYER in "${LAYER_TYPES[@]}"; do
     python -m src.train \
       --model ExtendableSheafGCN \
-      --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE}$ENABLE_SUBSAMPLING_CMD" \
+      --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" \
       --model-params "{'latent_dim':$LATENT_DIMS,'layer_types':$LAYER,'epochs_per_operator':20}" \
       --dataset $DATASET \
       --device $DEVICE \
