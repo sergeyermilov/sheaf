@@ -12,7 +12,7 @@ HOP_MAX_EDGES=$9 #[$BATCH_SIZE,$BATCH_SIZE*4,$BATCH_SIZE*8]
 
 ENABLE_SUBSAMPLING_CMD=""
 
-[[ $NUM_HOPS && $HOP_MAX_EDGES ]] && ENABLE_SUBSAMPLING_CMD=",'enable_subsampling':true,'num_k_hops':$NUM_HOPS,'hop_max_edges':$HOP_MAX_EDGES"
+[[ -n $NUM_HOPS && -n $HOP_MAX_EDGES ]] && ENABLE_SUBSAMPLING_CMD=",'enable_subsampling':true,'num_k_hops':$NUM_HOPS,'hop_max_edges':$HOP_MAX_EDGES"
 
 echo "DEVICE = $DEVICE"
 echo "DATASET = $DATASET"
