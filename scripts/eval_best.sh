@@ -16,7 +16,7 @@ echo "BATCH_SIZE = $BATCH_SIZE"
 ARTIFACT_DIR="./BEST_${DATASET}_${EPOCHS}_$(date +%s)"
 
 for SEED in $(seq 1 $SAMPLES); do
-  python -m src.train --model EASE --dataset-params "{'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  python -m src.train --model EASE --model-params "{'lambda_reg':250}" --dataset-params "{'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model TopKPopularity --dataset-params "{'batch_size':$BATCH_SIZE}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 done;
 
