@@ -26,6 +26,7 @@ from .sheaf_layer import (
     OperatorComputeLayerTrainMode,
     ExtendableSheafGCNLayer
 )
+from ...graph_utils import compute_adj_normalized
 
 """
 This is extension over an approach implemented in EXSheafGCN. Here we use FFN over two embeddings and two global matrices
@@ -78,7 +79,7 @@ class ExtendableSheafGCN(pl.LightningModule):
         # adjacency matrix can be predefined for small datasets and be missing for large datasets,
         # in this case it will be computed on forward pass
         if hasattr(self.dataset, "adjacency_matrix"):
-            self.adjacency_matrix_norm = ExtendableSheafGCN.compute_adj_normalized(self.dataset.adjacency_matrix)
+            self.adjacency_matrix_norm = compute_adj_normalized(self.dataset.adjacency_matrix)
         else:
             self.adjacency_matrix_norm = None
 
@@ -114,7 +115,7 @@ class ExtendableSheafGCN(pl.LightningModule):
     def get_normalized_adjacency_matrix(self, edge_index: torch.Tensor):
         if self.adjacency_matrix_norm is None:
             adjacency_matrix = torch.squeeze(to_dense_adj(edge_index))
-            return ExtendableSheafGCN.compute_adj_normalized(adjacency_matrix)
+            return compute_adj_normalized(adjacency_matrix)
 
         return self.adjacency_matrix_norm
 
@@ -241,11 +242,3 @@ class ExtendableSheafGCN(pl.LightningModule):
     def init_parameters(self):
         nn.init.normal_(self.embedding.weight, std=0.1)
         self.sheaf_conv.init_parameters()
-
-    @staticmethod
-    def compute_adj_normalized(adjacency_matrix):
-        degree = adjacency_matrix.sum(dim=1)
-        degree_inv_sqrt = torch.pow(degree, -0.5)
-        degree_inv_sqrt[torch.isinf(degree_inv_sqrt)] = 0
-        diag_degree_inv_sqrt = torch.diag(degree_inv_sqrt)
-        return diag_degree_inv_sqrt @ adjacency_matrix @ diag_degree_inv_sqrt
