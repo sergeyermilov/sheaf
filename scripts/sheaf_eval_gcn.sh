@@ -23,8 +23,7 @@ echo "BATCH_SIZE = $BATCH_SIZE"
 ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}_$(date +%s)"
 
 #LAYER_TYPES=("['hetero_global']" "['homo_global']" "['homo_simple_ffn']" "['hetero_simple_ffn']" "['hetero_global','hetero_simple_ffn']" "['homo_global','homo_simple_ffn']")
-
-LAYER_TYPES=("['hetero_global','hetero_simple_ffn']")
+LAYER_TYPES=("['hetero_global']" "['hetero_simple_ffn']" "['hetero_global','hetero_simple_ffn']")
 
 for SEED in $(seq 1 $SAMPLES); do
   for LAYER in "${LAYER_TYPES[@]}"; do
