@@ -97,7 +97,7 @@ def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_ev
 
 @click.command()
 @click.option("--device", default="cpu", type=str)
-@click.option("--artifact-id", default="469b2c637e61", type=str, required=True)
+@click.option("--artifact-id", default="b2316d2e011e", type=str, required=True)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 @click.option("--task-type", default="node_classification", type=click.Choice(['node_classification', 'recommendations']))
 def main(device, artifact_id, artifact_dir, task_type):

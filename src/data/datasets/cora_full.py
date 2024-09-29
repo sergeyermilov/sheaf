@@ -11,7 +11,7 @@ class CoraFullTorchDataset(Dataset):
     def __init__(self, node_features, node_labels, train_edge_index, mask, random_state=42):
         self.node_features = node_features
         self.node_labels = node_labels
-        self.num_classes = 70
+        self.num_classes = torch.unique(node_labels).shape[0]
         self.num_features = node_features.shape[1]
         self.train_edge_index = train_edge_index
         self.mask = mask

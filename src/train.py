@@ -63,7 +63,7 @@ DATASETS = {
 @click.option("--dataset-params", default="{}", type=str)
 @click.option("--model-params", default="""{"latent_dim": 40}""", type=str)
 @click.option("--dataset-dir", default="data/", type=pathlib.Path)
-@click.option("--epochs", default=20, type=int)
+@click.option("--epochs", default=30, type=int)
 @click.option("--device", default="cpu", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 @click.option("--denoise", is_flag=True)

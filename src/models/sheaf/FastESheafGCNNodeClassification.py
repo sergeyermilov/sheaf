@@ -97,9 +97,9 @@ class FastESheafGCNNodeClassification(pl.LightningModule):
 
     def training_step(self, batch):
         indexes, features = batch
-        proba = self.encode_minibatch()
+        logits = self.encode_minibatch()
 
-        cross_entropy_loss = self.loss(proba[indexes],
+        cross_entropy_loss = self.loss(logits[indexes],
                                        one_hot(self.node_labels[indexes],
                                                self.dataset.num_classes)
                                        .double()
