@@ -2,16 +2,18 @@ import torch
 import torch.nn as nn
 from unittest import TestCase
 
-from src.models.sheaf.ExtendableSheafGCN.model import (
-    ExtendableSheafGCNLayer,
+from src.models.sheaf.ExtendableSheafGCN.sheaf_layer import (
     OperatorComputeLayerTrainMode,
+    ExtendableSheafGCNLayer,
 )
-from src.models.sheaf.ExtendableSheafGCN.compute_layer import (
+from src.models.sheaf.ExtendableSheafGCN.operator_compute import (
     LayerCompositionType,
     SheafOperators,
-    GlobalOperatorComputeLayer,
-    SingleEntityOperatorComputeLayer,
-    PairedEntityOperatorComputeLayer,
+    HeterogeneousGlobalOperatorComputeLayer,
+    HeterogeneousSimpleFFNOperatorComputeLayer, # TODO: make AT
+    HomogenousPairedFFNOperatorComputeLayer,
+    HomogenousSimpleFFNOperatorComputeLayer,
+    HomogenousGlobalOperatorComputeLayer, # TODO: make AT
 )
 
 
@@ -80,10 +82,10 @@ class TestExtendableSheafGCN(TestCase):
         assert sheaf_operators.operator_vu[4:, 0, 0].min() == 1, \
             "Incorrect user matrix A(v, u) element."
 
-    def test_global_layer(self):
-        global_layer = GlobalOperatorComputeLayer(
-            dimx=self.dimx,
-            dimy=self.dimy,
+    def test_hetero_global_layer(self):
+        global_layer = HeterogeneousGlobalOperatorComputeLayer(
+            dim_in=self.dimx,
+            dim_out=self.dimy,
             user_indices=self.user_indices,
             item_indices=self.item_indices,
             composition_type=LayerCompositionType.ADDITIVE
@@ -101,7 +103,7 @@ class TestExtendableSheafGCN(TestCase):
 
         self.assert_operators(sheaf_operators)
 
-    def test_single_layer(self):
+    def test_homo_simple_ffn_layer(self):
         def compute_matrix(embeddings: torch.Tensor) -> torch.Tensor:
             mask = torch.isin(
                 embeddings.argmax(dim=1),
@@ -115,11 +117,9 @@ class TestExtendableSheafGCN(TestCase):
 
             return matrices
 
-        single_layer = SingleEntityOperatorComputeLayer(
-            dimx=self.dimx,
-            dimy=self.dimy,
-            user_indices=self.user_indices,
-            item_indices=self.item_indices,
+        single_layer = HomogenousSimpleFFNOperatorComputeLayer(
+            dim_in=self.dimx,
+            dim_out=self.dimy,
             composition_type=LayerCompositionType.ADDITIVE
         )
         single_layer.fc_smat = LambdaModule(compute_matrix)
@@ -133,7 +133,7 @@ class TestExtendableSheafGCN(TestCase):
 
         self.assert_operators(sheaf_operators)
 
-    def test_paired_layer(self):
+    def test_homo_paired_ffn_layer(self):
         def compute_matrix(embeddings: torch.Tensor) -> torch.Tensor:
             mask = torch.isin(
                 embeddings[:, :embeddings.shape[1] // 2].argmax(dim=1),
@@ -147,11 +147,9 @@ class TestExtendableSheafGCN(TestCase):
 
             return matrices
 
-        paired_layer = PairedEntityOperatorComputeLayer(
-            dimx=self.dimx,
-            dimy=self.dimy,
-            user_indices=self.user_indices,
-            item_indices=self.item_indices,
+        paired_layer = HomogenousPairedFFNOperatorComputeLayer(
+            dim_in=self.dimx,
+            dim_out=self.dimy,
             composition_type=LayerCompositionType.ADDITIVE
         )
         paired_layer.fc_smat = LambdaModule(compute_matrix)
@@ -166,27 +164,23 @@ class TestExtendableSheafGCN(TestCase):
         self.assert_operators(sheaf_operators)
 
     def test_layer_ordering(self):
-        global_layer = GlobalOperatorComputeLayer(
-            dimx=self.dimx,
-            dimy=self.dimy,
+        global_layer = HeterogeneousGlobalOperatorComputeLayer(
+            dim_in=self.dimx,
+            dim_out=self.dimy,
             user_indices=self.user_indices,
             item_indices=self.item_indices,
             composition_type=LayerCompositionType.ADDITIVE
         )
 
-        paired_layer = PairedEntityOperatorComputeLayer(
-            dimx=self.dimx,
-            dimy=self.dimy,
-            user_indices=self.user_indices,
-            item_indices=self.item_indices,
+        paired_layer = HomogenousPairedFFNOperatorComputeLayer(
+            dim_in=self.dimx,
+            dim_out=self.dimy,
             composition_type=LayerCompositionType.ADDITIVE
         )
 
-        single_layer = SingleEntityOperatorComputeLayer(
-            dimx=self.dimx,
-            dimy=self.dimy,
-            user_indices=self.user_indices,
-            item_indices=self.item_indices,
+        single_layer = HomogenousSimpleFFNOperatorComputeLayer(
+            dim_in=self.dimx,
+            dim_out=self.dimy,
             composition_type=LayerCompositionType.ADDITIVE
         )
 

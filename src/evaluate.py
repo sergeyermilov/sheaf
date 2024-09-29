@@ -97,22 +97,21 @@ def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_ev
 
 @click.command()
 @click.option("--device", default="cpu", type=str)
-@click.option("--artifact-id", default="2ea66f794823", type=str, required=True)
+@click.option("--artifact-id", default="469b2c637e61", type=str, required=True)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 @click.option("--task-type", default="node_classification", type=click.Choice(['node_classification', 'recommendations']))
 def main(device, artifact_id, artifact_dir, task_type):
     artifact_dir = artifact_dir.joinpath(artifact_id)
 
-    configs = None
     with open(artifact_dir.joinpath("config.json"), "r") as fhandle:
         configs = json.load(fhandle)
 
     model = configs['model']
     dataset = configs['dataset']
-    params = json.loads(configs['model_params'].replace("'", "\""))
-    batch_size = configs['batch_size']
+    model_params = json.loads(configs['model_params'].replace("'", "\""))
+    dataset_params = json.loads(configs['dataset_params'].replace("'", "\""))
     epochs = configs['epochs']
-    split = configs['split']
+    denoise = configs['denoise']
 
     print("------------------------------------------------")
     print("Evaluate model with the following configuration:")
@@ -120,12 +119,12 @@ def main(device, artifact_id, artifact_dir, task_type):
     print(f"date= {datetime.datetime.now()}")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
-    print(f"params = {params}")
-    print(f"batch_size = {batch_size}")
+    print(f"model-params = {model_params}")
+    print(f"dataset-params = {dataset_params}")
     print(f"epochs = {epochs}")
     print(f"device = {device}")
-    print(f"artifact_dir = {artifact_dir}")
-    print(f"split = {split}")
+    print(f"artifact-dir = {artifact_dir}")
+    print(f"denoise = {denoise}")
     print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
@@ -146,7 +145,7 @@ def main(device, artifact_id, artifact_dir, task_type):
     test_dataset = ml_data_module.test_dataset
 
     model_instance = MODELS[model].load_from_checkpoint(
-        artifact_dir.joinpath(f"model.pickle"), dataset=train_dataset, **params
+        artifact_dir.joinpath(f"model.pickle"), dataset=train_dataset, **model_params
     )
     model_instance.eval()
     model_instance = model_instance.to(device)
@@ -174,7 +173,11 @@ def eval_recommendation_task(configs, model_instance, train_dataset, test_datase
 
     if not is_alternate_evaluation:
         with torch.no_grad():
-            _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
+            if denoise:
+                embeddings = model_instance.get_denoised_embeddings()
+            else:
+                _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
+
             user_embeddings, item_embeddings = torch.split(embeddings,
                                                            (train_dataset.num_users, train_dataset.num_items))
 
@@ -196,16 +199,25 @@ def eval_recommendation_task(configs, model_instance, train_dataset, test_datase
     for k, v in brief.items():
         print(f"{k}: {v}")
 
+
 def eval_node_classifcation_task(configs, model_instance, train_dataset, test_dataset, device, artifact_dir):
+    model = configs['model']
+    dataset = configs['dataset']
+    epochs = configs['epochs']
+
     predicts = model_instance()
 
     true_labels = test_dataset.node_labels[test_dataset.mask].numpy()
 
     predicted_labels = np.argmax(predicts[test_dataset.mask].detach().numpy(), axis=1)
+    report = classification_report(true_labels, predicted_labels, output_dict=True)
 
-    report = classification_report(true_labels, predicted_labels)
+    with open(artifact_dir.joinpath(f"brief.json"), "w") as brief_file:
+        json.dump(report, brief_file)
 
-    print(report)
+    print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
+    for k, v in report.items():
+        print(f"{k}: {v}")
 
 
 if __name__ == "__main__":
