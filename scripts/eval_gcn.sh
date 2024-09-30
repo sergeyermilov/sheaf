@@ -33,7 +33,7 @@ for SEED in $(seq 1 $SAMPLES); do
 #  python -m src.train --model TopKPopularity --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 #  python -m src.train --model EASE --model-params "{'lambda_reg':250}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model GAT --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-  python -m src.train --model SheafGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+#  python -m src.train --model SheafGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model LightGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 done;
 
