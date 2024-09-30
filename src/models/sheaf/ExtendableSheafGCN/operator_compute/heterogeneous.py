@@ -68,15 +68,19 @@ class HeterogeneousSimpleFFNOperatorComputeLayer(HeterogeneousOperatorComputeLay
                 u_indices: torch.Tensor,
                 v_indices: torch.Tensor) -> SheafOperators:
 
-        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings), (-1, self.dim_out, self.dim_in))
-        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings), (-1, self.dim_out, self.dim_in))
+        embeddings_zero = torch.zeros_like(embeddings)
+
+        print("WARNING, SIMPLE FFN USES ZERO EMBEDDING VECTOR!!")
+
+        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings_zero), (-1, self.dim_out, self.dim_in))
+        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings_zero), (-1, self.dim_out, self.dim_in))
 
         u_user_mask = torch.isin(u_indices, self.user_indices)
         u_item_mask = torch.isin(u_indices, self.item_indices)
         v_user_mask = torch.isin(v_indices, self.user_indices)
         v_item_mask = torch.isin(v_indices, self.item_indices)
 
-        if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
+        if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings_zero):
             operators.operator_uv[u_user_mask, ...] += operator_by_embedding_user[u_indices[u_user_mask], ...]
             operators.operator_uv[u_item_mask, ...] += operator_by_embedding_item[u_indices[u_item_mask], ...]
             operators.operator_vu[v_user_mask, ...] += operator_by_embedding_user[v_indices[v_user_mask], ...]
@@ -104,12 +108,8 @@ class HeterogeneousSimpleFFNOperatorComputeLayer(HeterogeneousOperatorComputeLay
     def compute_for_denoise(self,
                             embeddings: torch.Tensor,
                             operators: torch.Tensor) -> torch.Tensor:
-        embeddings_zero = torch.zeros_like(embeddings)
-
-        print("WARNING, SIMPLE FFN USES ZERO EMBEDDING VECTOR!!")
-
-        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings_zero), (-1, self.dim_out, self.dim_in))
-        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings_zero), (-1, self.dim_out, self.dim_in))
+        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings), (-1, self.dim_out, self.dim_in))
+        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings), (-1, self.dim_out, self.dim_in))
 
         if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
             operators[self.user_indices, ...] += operator_by_embedding_user[self.user_indices, ...]
