@@ -104,8 +104,12 @@ class HeterogeneousSimpleFFNOperatorComputeLayer(HeterogeneousOperatorComputeLay
     def compute_for_denoise(self,
                             embeddings: torch.Tensor,
                             operators: torch.Tensor) -> torch.Tensor:
-        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings), (-1, self.dim_out, self.dim_in))
-        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings), (-1, self.dim_out, self.dim_in))
+        embeddings_zero = torch.zeros_like(embeddings)
+
+        print("WARNING, SIMPLE FFN USES ZERO EMBEDDING VECTOR!!")
+
+        operator_by_embedding_user = torch.reshape(self.fc_smat_user(embeddings_zero), (-1, self.dim_out, self.dim_in))
+        operator_by_embedding_item = torch.reshape(self.fc_smat_item(embeddings_zero), (-1, self.dim_out, self.dim_in))
 
         if self.composition_type == LayerCompositionType.ADDITIVE or is_zero_matrix(embeddings):
             operators[self.user_indices, ...] += operator_by_embedding_user[self.user_indices, ...]
