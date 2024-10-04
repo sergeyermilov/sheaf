@@ -87,8 +87,10 @@ class ESheafGCN(pl.LightningModule):
         degree_inv_sqrt = torch.pow(degree, -0.5)
         degree_inv_sqrt[torch.isinf(degree_inv_sqrt)] = 0
         diag_degree_inv_sqrt = torch.diag(degree_inv_sqrt)
+
         self.normalized_adj = diag_degree_inv_sqrt @ self.adj @ diag_degree_inv_sqrt
         self.adj = self.normalized_adj
+
         self.train_edge_index = self.dataset.train_edge_index
         self.init_parameters()
 
@@ -127,7 +129,7 @@ class ESheafGCN(pl.LightningModule):
         loss_cons = torch.mean((smat_proj - smat) * (smat_proj - smat)) * self.latent_dim * self.latent_dim
         w_smap, w_orth, w_cons, w_bpr = compute_loss_weights_simple(loss_smap, loss_orth, loss_cons, bpr_loss, 1024)
 
-        loss = w_smap * loss_smap + w_bpr * bpr_loss #+ w_orth * loss_orth + w_cons * loss_cons
+        loss = w_smap * loss_smap + w_bpr * bpr_loss + w_orth * loss_orth + w_cons * loss_cons
 
         if Losses.CONSISTENCY in self.losses:
             loss += w_cons * loss_cons
@@ -152,11 +154,6 @@ class ESheafGCN(pl.LightningModule):
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         emb0, xmap, y, out, rmat, smat, smat_proj = self.forward_(edge_index)
-     #   debug_print_tensor(y, "Y")
-     #   debug_print_tensor(pos_items, "pos_items")
-     #   debug_print_tensor(neg_items, "neg_items")
-      #  print(max(pos_items))
-      #  print(max(neg_items))
         return (
            emb0,
            xmap,

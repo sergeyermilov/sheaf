@@ -3,6 +3,7 @@ class Losses:
     CONSISTENCY = "cons"
     DIFFUSION = "diff"
     BPR = "bpr"
+    LOGLOSS = "logloss"
 
     @staticmethod
     def validate(losses):
@@ -10,7 +11,8 @@ class Losses:
             Losses.ORTHOGONALITY,
             Losses.CONSISTENCY,
             Losses.DIFFUSION,
-            Losses.BPR
+            Losses.BPR,
+            Losses.LOGLOSS
         }
 
         assert losses and all([loss in valid_losses for loss in losses]), "none or invalid layers"
