@@ -96,7 +96,8 @@ def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_ev
 @click.option("--device", default="cuda", type=str)
 @click.option("--artifact-id", type=str, required=True)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
-def main(device, artifact_id, artifact_dir):
+@click.option("--model-name", default="model.pickle", type=str)
+def main(device, artifact_id, artifact_dir, model_name):
     artifact_dir = artifact_dir.joinpath(artifact_id)
 
     with open(artifact_dir.joinpath("config.json"), "r") as fhandle:
@@ -115,12 +116,14 @@ def main(device, artifact_id, artifact_dir):
     print(f"date= {datetime.datetime.now()}")
     print(f"model = {model}")
     print(f"dataset = {dataset}")
+    print(f"model_name = {model_name}")
     print(f"model-params = {model_params}")
     print(f"dataset-params = {dataset_params}")
     print(f"epochs = {epochs}")
     print(f"device = {device}")
     print(f"artifact-dir = {artifact_dir}")
     print(f"denoise = {denoise}")
+
     print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
@@ -141,7 +144,7 @@ def main(device, artifact_id, artifact_dir):
     test_dataset = ml_data_module.test_dataset
 
     model_instance = MODELS[model].load_from_checkpoint(
-        artifact_dir.joinpath(f"model.pickle"), dataset=train_dataset, **model_params
+        artifact_dir.joinpath(f"checkpoints/{model_name}"), dataset=train_dataset, **model_params
     )
     model_instance.eval()
     model_instance = model_instance.to(device)
@@ -170,13 +173,13 @@ def main(device, artifact_id, artifact_dir):
     res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
     res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
 
-    res.to_csv(artifact_dir.joinpath(f"report.csv"), index=False)
+    os.makedirs(artifact_dir.joinpath(f"reports"), exist_ok=True)
 
     brief = dict()
     for c in itertools.chain(metrics_5, metrics_10, metrics_20, metrics_50):
         brief[c] = res[c].mean()
 
-    with open(artifact_dir.joinpath(f"brief.json"), "w") as brief_file:
+    with open(artifact_dir.joinpath(f"reports").joinpath(f"{model_name}_report.json"), "w") as brief_file:
         json.dump(brief, brief_file)
 
     print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")

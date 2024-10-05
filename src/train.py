@@ -6,6 +6,7 @@ import pathlib
 import datetime
 
 from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 
 from src.models.best.ease import EASE
@@ -118,10 +119,12 @@ def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, devi
         if not model_instance.is_denoisable():
             raise Exception("Current configuration is not denoisable")
 
+    checkpoint_callback = ModelCheckpoint(dirpath=str(artifact_dir) + "/checkpoints", save_top_k=-1)
+
     trainer = Trainer(max_epochs=epochs, log_every_n_steps=1, logger=[
         CSVLogger(artifact_dir, name="train_logs"),
         TensorBoardLogger(artifact_dir, name="train_tb")
-    ])
+    ], callbacks=[checkpoint_callback])
     trainer.fit(model_instance, train_dataloader)
     trainer.save_checkpoint(str(artifact_dir.joinpath(f"model.pickle")))
 
