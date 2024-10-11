@@ -9,12 +9,14 @@ import itertools
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import classification_report
 from tqdm import tqdm
 
 from src.models.best.ease import EASE
 from src.models.best.top import TopKPopularity
 from src.models.sheaf.ExtendableSheafGCN import ExtendableSheafGCN
 from src.models.sheaf.FastESheafGCN import FastESheafGCN
+from src.models.sheaf.FastESheafGCNNodeClassification import FastESheafGCNNodeClassification
 from src.models.sheaf.SheafGCN import SheafGCN
 from src.models.sheaf.ESheafGCN import ESheafGCN
 
@@ -24,6 +26,7 @@ from src.models.graph.GAT import GAT
 MODELS = {
     # sheaf models
     "ExtendableSheafGCN": ExtendableSheafGCN,
+    "FastESheafGCNNodeClassification": FastESheafGCNNodeClassification,
     "ESheafGCN": ESheafGCN,
     "SheafGCN": SheafGCN,
     # other models
@@ -93,11 +96,12 @@ def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_ev
 
 
 @click.command()
-@click.option("--device", default="cuda", type=str)
-@click.option("--artifact-id", type=str, required=True)
+@click.option("--device", default="cpu", type=str)
+@click.option("--artifact-id", default="b2316d2e011e", type=str, required=True)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
+@click.option("--task-type", default="node_classification", type=click.Choice(['node_classification', 'recommendations']))
 @click.option("--model-name", default="model.pickle", type=str)
-def main(device, artifact_id, artifact_dir, model_name):
+def main(device, artifact_id, artifact_dir, task_type, model_name):
     artifact_dir = artifact_dir.joinpath(artifact_id)
 
     with open(artifact_dir.joinpath("config.json"), "r") as fhandle:
@@ -148,6 +152,18 @@ def main(device, artifact_id, artifact_dir, model_name):
     )
     model_instance.eval()
     model_instance = model_instance.to(device)
+    if task_type == "recommendations":
+        eval_recommendation_task(configs, model_instance, train_dataset, test_dataset, device, artifact_dir)
+    elif task_type == "node_classification":
+        eval_node_classifcation_task(configs, model_instance, train_dataset, test_dataset, device, artifact_dir)
+    else:
+        raise Exception("You can't be here")
+
+
+def eval_recommendation_task(configs, model_instance, train_dataset, test_dataset, device, artifact_dir):
+    model = configs['model']
+    dataset = configs['dataset']
+    epochs = configs['epochs']
 
     res = test_dataset.interacted_items_by_user_idx.copy(deep=True)
     interactions = train_dataset.interacted_items_by_user_idx.copy(deep=True).rename(
@@ -184,6 +200,26 @@ def main(device, artifact_id, artifact_dir, model_name):
 
     print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
     for k, v in brief.items():
+        print(f"{k}: {v}")
+
+
+def eval_node_classifcation_task(configs, model_instance, train_dataset, test_dataset, device, artifact_dir):
+    model = configs['model']
+    dataset = configs['dataset']
+    epochs = configs['epochs']
+
+    predicts = model_instance()
+
+    true_labels = test_dataset.node_labels[test_dataset.mask].numpy()
+
+    predicted_labels = np.argmax(predicts[test_dataset.mask].detach().numpy(), axis=1)
+    report = classification_report(true_labels, predicted_labels, output_dict=True)
+
+    with open(artifact_dir.joinpath(f"brief.json"), "w") as brief_file:
+        json.dump(report, brief_file)
+
+    print(f"Evaluation results for model {model} over dataset {dataset} that was trained on {epochs} epochs:")
+    for k, v in report.items():
         print(f"{k}: {v}")
 
 

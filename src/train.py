@@ -9,6 +9,10 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 
+from src.data.datasets.actor_dataset import ActorDataModule, ACTOR_DATASET_RELATIVE_PATH
+from src.data.datasets.chameleon import ChameleonDataModule, CHAMELEON_DATASET_RELATIVE_PATH
+from src.data.datasets.cora_full import CoraFullDataModule, CORA_FULL_DATASET_RELATIVE_PATH
+from src.data.datasets.texas import TexasDataModule, TEXAS_DATASET_RELATIVE_PATH
 from src.models.best.ease import EASE
 from src.models.best.top import TopKPopularity
 from src.models.sheaf.FastESheafGCN import FastESheafGCN
@@ -23,6 +27,7 @@ from src.data.datasets.yahoo_movies import YahooMoviesDataModule, YAHOO_DATASET_
 from src.models.sheaf.ExtendableSheafGCN import ExtendableSheafGCN
 from src.models.sheaf.SheafGCN import SheafGCN
 from src.models.sheaf.ESheafGCN import ESheafGCN
+from src.models.sheaf.FastESheafGCNNodeClassification import FastESheafGCNNodeClassification
 
 from src.models.graph.LightGCN import LightGCN
 from src.models.graph.GAT import GAT
@@ -31,6 +36,7 @@ MODELS = {
     # sheaf models
     "ExtendableSheafGCN": ExtendableSheafGCN,
     "ESheafGCN": ESheafGCN,
+    "FastESheafGCNNodeClassification": FastESheafGCNNodeClassification,
     "FastESheafGCN": FastESheafGCN,
     "SheafGCN": SheafGCN,
     # graph models
@@ -44,18 +50,22 @@ DATASETS = {
     "FACEBOOK": (FacebookDataModule, FACEBOOK_DATASET_RELATIVE_PATH),
     "MOVIELENS1M": (MovieLensDataModule, MOVIE_LENS_1M_DATASET_RELATIVE_PATH),
     "MOVIELENS10M": (MovieLensDataModule, MOVIE_LENS_10M_DATASET_RELATIVE_PATH),
-    "YAHOO": (YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH)
+    "YAHOO": (YahooMoviesDataModule, YAHOO_DATASET_RELATIVE_PATH),
+    "TEXAS": (TexasDataModule, TEXAS_DATASET_RELATIVE_PATH),
+    "CHAMELEON":  (ChameleonDataModule, CHAMELEON_DATASET_RELATIVE_PATH),
+    "CORA_FULL": (CoraFullDataModule, CORA_FULL_DATASET_RELATIVE_PATH),
+    "ACTOR": (ActorDataModule, ACTOR_DATASET_RELATIVE_PATH)
 }
 
 
 @click.command()
-@click.option("--model", default="LightGCN", type=str)
-@click.option("--dataset", default="FACEBOOK", type=str)
+@click.option("--model", default="FastESheafGCNNodeClassification", type=str)
+@click.option("--dataset", default="TEXAS", type=str)
 @click.option("--dataset-params", default="{}", type=str)
-@click.option("--model-params", default="{}", type=str)
+@click.option("--model-params", default="""{"latent_dim": 40}""", type=str)
 @click.option("--dataset-dir", default="data/", type=pathlib.Path)
-@click.option("--epochs", default=20, type=int)
-@click.option("--device", default="cuda", type=str)
+@click.option("--epochs", default=30, type=int)
+@click.option("--device", default="cpu", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 @click.option("--denoise", is_flag=True)
 def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, device, artifact_dir, denoise):
