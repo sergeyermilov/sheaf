@@ -161,8 +161,8 @@ def main(model,
 
     if checkpoint:
         shutil.copy(checkpoint_callback.best_model_path, str(artifact_dir.joinpath(f"model.pickle")))
-
-    trainer.save_checkpoint(str(artifact_dir.joinpath(f"model.pickle")))
+    else:
+        trainer.save_checkpoint(str(artifact_dir.joinpath(f"model.pickle")))
 
 
 if __name__ == "__main__":

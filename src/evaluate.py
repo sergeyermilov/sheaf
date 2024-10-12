@@ -1,5 +1,6 @@
 import os
 import typing
+from functools import partial
 
 import torch
 import click
@@ -72,10 +73,10 @@ def get_metrics(_df: pd.DataFrame, k: int, compute_recs_fn: typing.Callable):
     intersected_k = f"intersected_{k}"
     recall_k = f"recall_{k}"
     precision_k = f"precision_{k}"
-    ranks_k = f'ranks_{k}'
+    ranks_k = f"ranks_{k}"
     ndcg_k = f"ndcg_{k}"
 
-    _df[reco_k] = _df.progress_apply(compute_recs_fn, axis=1)
+    _df[reco_k] = _df.progress_apply(partial(compute_recs_fn, k=k), axis=1)
 
     _df[intersected_k] = _df.apply(lambda x: list(set(x[f"reco_{k}"]).intersection(x["item_id_idx"])), axis=1)
 
@@ -119,7 +120,6 @@ def main(device, artifact_id, artifact_dir, model_name):
     print(f"device = {device}")
     print(f"artifact-dir = {artifact_dir}")
     print(f"denoise = {denoise}")
-
     print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
@@ -145,12 +145,16 @@ def main(device, artifact_id, artifact_dir, model_name):
     model_instance.eval()
     model_instance = model_instance.to(device)
 
-    res = test_dataset.interacted_items_by_user_idx.copy(deep=True)
-    interactions = train_dataset.interacted_items_by_user_idx.copy(deep=True).rename(
-        columns={"item_id_idx": "interacted_id_idx"})
+    interacted_items_by_user_idx = test_dataset.interacted_items_by_user_idx.reset_index()
+
+    res = interacted_items_by_user_idx.copy(deep=True)
+    interactions = (interacted_items_by_user_idx
+                    .copy(deep=True)
+                    .rename(columns={"item_id_idx": "interacted_id_idx"}))
+
     res = res.merge(interactions, on=["user_id_idx"])
 
-    if model not in ["TopKPopularity", "EASE"]:
+    if not hasattr(model, "evaluate"):
         with torch.no_grad():
             if denoise:
                 embeddings = model_instance.get_denoised_embeddings()
@@ -161,14 +165,14 @@ def main(device, artifact_id, artifact_dir, model_name):
                 embeddings, [train_dataset.num_users, train_dataset.num_items]
             )
 
-        compute_recs_fn = lambda k: lambda x: infer_dotprod(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k)
+            compute_recs_fn = lambda x, k: infer_dotprod(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k)
     else:
-        compute_recs_fn = lambda k: lambda x: model.evaluate(x["interacted_id_idx"], k)
+        compute_recs_fn = lambda x, k: model.evaluate(x["interacted_id_idx"], k)
 
-    res, metrics_5 = get_metrics(res, 5, compute_recs_fn(5))
-    res, metrics_10 = get_metrics(res, 10, compute_recs_fn(10))
-    res, metrics_20 = get_metrics(res, 20, compute_recs_fn(20))
-    res, metrics_50 = get_metrics(res, 50, compute_recs_fn(50))
+    res, metrics_5 = get_metrics(res, 5, compute_recs_fn)
+    res, metrics_10 = get_metrics(res, 10, compute_recs_fn)
+    res, metrics_20 = get_metrics(res, 20, compute_recs_fn)
+    res, metrics_50 = get_metrics(res, 50, compute_recs_fn)
 
     os.makedirs(artifact_dir.joinpath(f"reports"), exist_ok=True)
 

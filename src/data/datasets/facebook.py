@@ -44,7 +44,9 @@ class FacebookDataset(Dataset):
         row = self.interacted_items_by_user_idx.loc[user_idx]
         pos_item_idx = random.choice(row)
         neg_item_idx = self.sample_neg(row)
-        return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(neg_item_idx + self.num_users)
+        return (torch.tensor(user_idx),
+                torch.tensor(pos_item_idx + self.num_users),
+                torch.tensor(neg_item_idx + self.num_users))
 
     def sample_neg(self, x):
         while True:
@@ -80,10 +82,11 @@ class FacebookDataModule(LightningDataModule):
         self.val_df = pd.DataFrame(val, columns=self.pandas_data.columns)
         self.test_df = pd.DataFrame(test, columns=self.pandas_data.columns)
 
-        label_encoder_user = pp.LabelEncoder()
-        label_encoder_item = pp.LabelEncoder()
-        self.train_df["user_id_idx"] = label_encoder_user.fit_transform(self.train_df['user_id'].values)
-        self.train_df["item_id_idx"] = label_encoder_item.fit_transform(self.train_df['item_id'].values)
+        label_encoder_user = pp.LabelEncoder().fit(self.pandas_data['user_id'].values)
+        label_encoder_item = pp.LabelEncoder().fit(self.pandas_data['item_id'].values)
+
+        self.train_df["user_id_idx"] = label_encoder_user.transform(self.train_df['user_id'])
+        self.train_df["item_id_idx"] = label_encoder_item.transform(self.train_df['item_id'])
 
         train_user_ids = self.train_df['user_id'].unique()
         train_item_ids = self.train_df['item_id'].unique()

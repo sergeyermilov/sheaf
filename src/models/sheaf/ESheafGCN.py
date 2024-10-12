@@ -158,7 +158,13 @@ class ESheafGCN(pl.LightningModule):
         return self.do_step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss"
+        }
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         emb0, xmap, y, out, rmat, smat, smat_proj = self.forward_(edge_index)

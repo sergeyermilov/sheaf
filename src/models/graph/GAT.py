@@ -60,7 +60,7 @@ class GAT(pl.LightningModule):
         users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0 = self.encode_minibatch(start_nodes, pos_items, neg_items, edge_index)
         bpr_loss, reg_loss = compute_bpr_loss_with_reg(start_nodes, users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0)
 
-        loss = bpr_loss + reg_loss
+        loss = bpr_loss + 0.05 * reg_loss
         self.log(f'{suffix}_bpr_loss', bpr_loss)
         self.log(f'{suffix}_loss', loss)
         return loss
@@ -72,7 +72,13 @@ class GAT(pl.LightningModule):
         return self.do_step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss"
+        }
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         emb0, out = self.forward(edge_index)
