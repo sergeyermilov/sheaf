@@ -8,5 +8,5 @@ do
   echo $ENTRY
   filename="$(basename "$ENTRY")"
   echo $filename
-  python -m src.evaluate --artifact-dir $ARTIFACT_DIR --artifact-id $ARTIFACT_ID --device cpu --model-name $filename
+  python -m src.evaluate --artifact-dir $ARTIFACT_DIR --artifact-id $ARTIFACT_ID --device cpu --model-name "checkpoints/$filename"
 done

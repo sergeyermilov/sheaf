@@ -102,6 +102,12 @@ class ExtendableSheafGCN(pl.LightningModule):
         emb0 = self.embedding.weight
         return self.sheaf_conv.denoise(emb0)
 
+    def training_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "train")
+
+    def validation_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "val")
+
     def forward(self, edge_index: torch.Tensor):
         adjacency_matrix_norm = self.get_normalized_adjacency_matrix(edge_index)
         emb0 = self.embedding.weight
@@ -119,7 +125,7 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         return self.adjacency_matrix_norm
 
-    def training_step(self, batch, batch_idx):
+    def do_step(self, batch, batch_idx, suffix):
         if len(batch) == 3:
             start_nodes, pos_items, neg_items = batch
             edge_index = self.edge_index
@@ -130,7 +136,10 @@ class ExtendableSheafGCN(pl.LightningModule):
 
         self.update_epoch()
 
-        embs, start_nodes_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(start_nodes, pos_items, neg_items, edge_index)
+        embs, start_nodes_emb, pos_emb, neg_emb, loss_diff, loss_cons, loss_orth = self.encode_minibatch(start_nodes,
+                                                                                                         pos_items,
+                                                                                                         neg_items,
+                                                                                                         edge_index)
         w_diff, w_orth, w_cons, w_bpr = compute_loss_weight_paper(loss_diff, loss_orth, loss_cons, len(start_nodes))
 
         bpr_loss = compute_bpr_loss(start_nodes, start_nodes_emb, pos_emb, neg_emb)
@@ -142,16 +151,15 @@ class ExtendableSheafGCN(pl.LightningModule):
         if Losses.ORTHOGONALITY in self.losses:
             loss += w_orth * loss_orth
 
-        self.log('bpr_loss', bpr_loss)
-        self.log('loss_diff', loss_diff)
-        self.log('loss_orth', loss_orth)
-        self.log('loss_cons', loss_cons)
-
-        self.log("w_diff", w_diff)
-        self.log("w_bpr", w_bpr)
-        self.log("w_bpr", w_orth)
-        self.log("w_cons", w_cons)
-        self.log('loss', loss)
+        self.log(f'{suffix}_loss_bpr', bpr_loss)
+        self.log(f'{suffix}_loss_diff', loss_diff)
+        self.log(f'{suffix}_loss_orth', loss_orth)
+        self.log(f'{suffix}_loss_cons', loss_cons)
+        self.log(f'{suffix}_loss', loss)
+        self.log(f"{suffix}_w_diff", w_diff)
+        self.log(f"{suffix}_w_bpr", w_bpr)
+        self.log(f"{suffix}_w_bpr", w_orth)
+        self.log(f"{suffix}_w_cons", w_cons)
 
         return loss
 
@@ -229,7 +237,13 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.sheaf_conv.set_current_epoch(self.current_epoch)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss"
+        }
 
     def init_grad_clipping(self, clip_value):
         for param in self.parameters():

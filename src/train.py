@@ -2,11 +2,12 @@ import os
 import json
 import click
 import torch
+import shutil
 import pathlib
 import datetime
 
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 
 from src.models.best.ease import EASE
@@ -58,7 +59,20 @@ DATASETS = {
 @click.option("--device", default="cuda", type=str)
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 @click.option("--denoise", is_flag=True)
-def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, device, artifact_dir, denoise):
+@click.option("--checkpoint", is_flag=True)
+@click.option("--monitor_lr", is_flag=True)
+def main(model,
+         dataset,
+         dataset_params,
+         model_params,
+         dataset_dir,
+         epochs,
+         device,
+         artifact_dir,
+         denoise,
+         checkpoint,
+         monitor_lr):
+
     artifact_params = dict(
         model=model,
         dataset=dataset,
@@ -84,6 +98,8 @@ def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, devi
     print(f"artifact-dir = {artifact_dir}")
     print(f"artifact-id = {artifact_id}")
     print(f"denoise = {denoise}")
+    print(f"checkpoint = {checkpoint}")
+    print(f"monitor_lr = {monitor_lr}")
     print("-----------------------------------------------")
 
     artifact_dir = artifact_dir.joinpath(artifact_id)
@@ -108,6 +124,7 @@ def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, devi
     serialize_dataset(artifact_dir.joinpath(f"data.pickle"), ml_data_module)
 
     train_dataloader = ml_data_module.train_dataloader()
+    val_dataloader = ml_data_module.val_dataloader()
 
     model_class_partial = create_from_json_string(model_class, model_params)
     model_instance = model_class_partial(dataset=ml_data_module.train_dataset)
@@ -119,13 +136,32 @@ def main(model, dataset, dataset_params, model_params, dataset_dir, epochs, devi
         if not model_instance.is_denoisable():
             raise Exception("Current configuration is not denoisable")
 
-    checkpoint_callback = ModelCheckpoint(dirpath=str(artifact_dir) + "/checkpoints", save_top_k=-1)
+    callbacks = list()
 
-    trainer = Trainer(max_epochs=epochs, log_every_n_steps=1, logger=[
-        CSVLogger(artifact_dir, name="train_logs"),
-        TensorBoardLogger(artifact_dir, name="train_tb")
-    ], callbacks=[checkpoint_callback])
-    trainer.fit(model_instance, train_dataloader)
+    if(checkpoint):
+        callbacks.append(checkpoint_callback := ModelCheckpoint(
+                dirpath=str(artifact_dir) + "/checkpoints",
+                save_top_k=-1,
+                monitor="val_loss"
+        ))
+
+    if monitor_lr:
+        callbacks.append(LearningRateMonitor(logging_interval="step"))
+
+    trainer = Trainer(
+        max_epochs=epochs,
+        log_every_n_steps=1,
+        logger=[
+            CSVLogger(artifact_dir, name="logs_csv"),
+            TensorBoardLogger(artifact_dir, name="logs_tb")
+        ],
+        callbacks=callbacks
+    )
+    trainer.fit(model_instance, train_dataloader, val_dataloader)
+
+    if checkpoint:
+        shutil.copy(checkpoint_callback.best_model_path, str(artifact_dir.joinpath(f"model.pickle")))
+
     trainer.save_checkpoint(str(artifact_dir.joinpath(f"model.pickle")))
 
 

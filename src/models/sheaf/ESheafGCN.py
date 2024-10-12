@@ -1,5 +1,8 @@
+from typing import Any
+
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 
 from src.losses.bpr import compute_bpr_loss
@@ -117,7 +120,7 @@ class ESheafGCN(pl.LightningModule):
         y3 = self.sheaf_conv3(adj_matrix, y2, False)
         return emb0, y3
 
-    def training_step(self, batch, batch_idx):
+    def do_step(self, batch, batch_idx, suffix):
         users, pos_items, neg_items = batch
         emb0, xmap, embs, users_emb, pos_emb, neg_emb, rmat, smat, smat_proj = self.encode_minibatch(users, pos_items, neg_items, self.adj)
         bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
@@ -135,17 +138,24 @@ class ESheafGCN(pl.LightningModule):
         if Losses.ORTHOGONALITY in self.losses:
             loss += w_orth * loss_orth
 
-        self.log('bpr_loss', bpr_loss)
-        self.log('loss_smap', loss_smap)
-        self.log('loss_orth', loss_orth)
-        self.log('loss_cons', loss_cons)
+        self.log(f'{suffix}_bpr_loss', bpr_loss)
+        self.log(f'{suffix}_loss_smap', loss_smap)
+        self.log(f'{suffix}_loss_orth', loss_orth)
+        self.log(f'{suffix}_loss_cons', loss_cons)
 
-        self.log("w_smap", w_smap)
-        self.log("w_bpr", w_bpr)
-        self.log("w_bpr", w_orth)
-        self.log("w_cons", w_cons)
-        self.log('loss', loss)
+        self.log(f"{suffix}_w_smap", w_smap)
+        self.log(f"{suffix}_w_bpr", w_bpr)
+        self.log(f"{suffix}_w_bpr", w_orth)
+        self.log(f"{suffix}_w_cons", w_cons)
+        self.log(f'{suffix}_loss', loss)
+
         return loss
+
+    def training_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "train")
+
+    def validation_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.001)

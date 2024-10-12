@@ -48,7 +48,7 @@ class GAT(pl.LightningModule):
         out = (torch.mean(torch.stack(embs, dim=0), dim=0))
         return emb0, out
 
-    def training_step(self, batch, batch_idx):
+    def do_step(self, batch, batch_idx, suffix):
         if len(batch) == 3:
             start_nodes, pos_items, neg_items = batch
             edge_index = self.edge_index
@@ -61,9 +61,15 @@ class GAT(pl.LightningModule):
         bpr_loss, reg_loss = compute_bpr_loss_with_reg(start_nodes, users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0)
 
         loss = bpr_loss + reg_loss
-        self.log('bpr_loss', bpr_loss)
-        self.log('loss', loss)
+        self.log(f'{suffix}_bpr_loss', bpr_loss)
+        self.log(f'{suffix}_loss', loss)
         return loss
+
+    def training_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "train")
+
+    def validation_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.001)

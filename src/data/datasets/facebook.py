@@ -12,7 +12,7 @@ FACEBOOK_DATASET_RELATIVE_PATH = "facebook/Facebook dataset.tsv"
 
 
 class FacebookDataset(Dataset):
-    def __init__(self, df, random_state=42):
+    def __init__(self, df, num_users, num_items, random_state=42):
         random.seed(random_state)
 
         # Unique user and items ids as numpy array
@@ -20,12 +20,11 @@ class FacebookDataset(Dataset):
         self.user_ids = self.pandas_data.user_id.unique()
         self.item_ids = self.pandas_data.item_id.unique()
 
-        self.num_users = len(self.user_ids)
-        self.num_items = len(self.item_ids)
+        self.num_users = num_users
+        self.num_items = num_items
 
         # Create graph
-        self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(
-            list).reset_index()
+        self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(list)
 
         u_t = torch.tensor(self.pandas_data.user_id_idx.values, dtype=torch.long)
         i_t = torch.tensor(self.pandas_data.item_id_idx.values, dtype=torch.long) + self.num_users
@@ -42,10 +41,9 @@ class FacebookDataset(Dataset):
 
     def __getitem__(self, idx):
         user_idx = self.pandas_data["user_id_idx"].iloc[idx]
-        row = self.interacted_items_by_user_idx.iloc[user_idx]
-        user_idx = row["user_id_idx"]
-        pos_item_idx = random.choice(row["item_id_idx"])
-        neg_item_idx = self.sample_neg(row["item_id_idx"])
+        row = self.interacted_items_by_user_idx.loc[user_idx]
+        pos_item_idx = random.choice(row)
+        neg_item_idx = self.sample_neg(row)
         return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(neg_item_idx + self.num_users)
 
     def sample_neg(self, x):
@@ -69,6 +67,11 @@ class FacebookDataModule(LightningDataModule):
 
         COLUMNS_NAME = ['user_id', 'item_id', 'rating']
         self.pandas_data = pd.read_csv(dataset_path, sep=sep, names=COLUMNS_NAME, engine='python')
+
+        self.num_users = len(self.pandas_data.user_id.unique())
+        self.num_items = len(self.pandas_data.item_id.unique())
+
+        self.random_state = random_state
 
         # Train/val/test splitting
         train, test = train_test_split(self.pandas_data, test_size=0.2, random_state=random_state)
@@ -101,12 +104,11 @@ class FacebookDataModule(LightningDataModule):
         self.test_df['user_id_idx'] = label_encoder_user.transform(self.test_df['user_id'].values)
         self.test_df['item_id_idx'] = label_encoder_item.transform(self.test_df['item_id'].values)
 
-
     def setup(self):
         # Assign train/val datasets for use in dataloaders
-        self.train_dataset = FacebookDataset(self.train_df, 42)
-        self.val_dataset = FacebookDataset(self.val_df, 42)
-        self.test_dataset = FacebookDataset(self.test_df, 42)
+        self.train_dataset = FacebookDataset(self.train_df, self.num_users, self.num_items, self.random_state)
+        self.val_dataset = FacebookDataset(self.val_df, self.num_users, self.num_items, self.random_state)
+        self.test_dataset = FacebookDataset(self.test_df, self.num_users, self.num_items, self.random_state)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size)

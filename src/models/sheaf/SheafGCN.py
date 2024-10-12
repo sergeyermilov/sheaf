@@ -1,5 +1,8 @@
+from typing import Any
+
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 
 from src.losses.bpr import compute_bpr_loss
@@ -109,7 +112,7 @@ class SheafGCN(pl.LightningModule):
        out = (torch.mean(torch.stack(embs, dim=0), dim=0))
        return emb0, out
 
-    def training_step(self, batch, batch_idx):
+    def do_step(self, batch, batch_idx, suffix):
         if len(batch) == 3:
             start_nodes, pos_items, neg_items = batch
             edge_index = self.edge_index
@@ -123,8 +126,14 @@ class SheafGCN(pl.LightningModule):
                                                                                         neg_items,
                                                                                         edge_index)
         bpr_loss = compute_bpr_loss(start_nodes, users_emb, pos_emb, neg_emb)
-        self.log('bpr_loss', bpr_loss)
+        self.log(f'{suffix}_loss', bpr_loss)
         return bpr_loss
+
+    def training_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "train")
+
+    def validation_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.01)

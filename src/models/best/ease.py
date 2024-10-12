@@ -34,6 +34,9 @@ class EASE(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         return None
 
+    def validation_step(self, batch, batch_idx):
+        return None
+
     def configure_optimizers(self):
         pass
 
