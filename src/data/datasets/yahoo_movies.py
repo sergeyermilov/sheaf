@@ -193,7 +193,7 @@ class YahooMoviesDataModule(LightningDataModule):
                           batch_size=self.batch_size,
                           collate_fn=self.collate_fn,
                           pin_memory=False,
-                          shuffle=True,
+                          shuffle=False,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def test_dataloader(self):
@@ -201,7 +201,7 @@ class YahooMoviesDataModule(LightningDataModule):
                           batch_size=self.batch_size,
                           collate_fn=self.collate_fn,
                           pin_memory=False,
-                          shuffle=True,
+                          shuffle=False,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def collate_fn(self, batch):
