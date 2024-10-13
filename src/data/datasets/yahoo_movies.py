@@ -76,8 +76,8 @@ class YahooMoviesDataset(Dataset):
         user_idxs = sample["user_id_idx"].values
         user_idxs_tensor = torch.tensor(user_idxs)
         sample_interacted_items = self.interacted_items_by_user_idx.loc[user_idxs]
-        pos_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: random.choice(x)).values
-        neg_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: self.sample_neg(x)).values
+        pos_item_idxs = sample_interacted_items.apply(lambda x: random.choice(x)).values
+        neg_item_idxs = sample_interacted_items.apply(lambda x: self.sample_neg(x)).values
 
         if self.enable_subsampling:
             sub_edge_index = self.k_hop_subgraph(user_idxs_tensor, self.num_k_hops)

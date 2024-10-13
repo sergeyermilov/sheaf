@@ -20,6 +20,8 @@ echo "DATASET = $DATASET"
 echo "EPOCHS = $EPOCHS"
 echo "LATENT_DIMS = $LATENT_DIMS"
 echo "BATCH_SIZE = $BATCH_SIZE"
+echo "DEPTH = $DEPTH"
+echo "SAMPLES = $SAMPLES"
 
 ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}_$(date +%s)"
 
