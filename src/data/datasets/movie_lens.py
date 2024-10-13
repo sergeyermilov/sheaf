@@ -83,7 +83,7 @@ class MovieLensDataset(Dataset):
         user_idxs_tensor = torch.tensor(user_idxs)
         sample_interacted_items = self.interacted_items_by_user_idx.loc[user_idxs]
         pos_item_idxs = sample_interacted_items.apply(lambda x: random.choice(x)).values
-        neg_item_idxs = sample_interacted_items.apply(lambda x: self.sample_neg(x)).values
+        neg_item_idxs = sample_interacted_items.apply(lambda x: random.randint(0, self.num_items - 1)).values
 
         if self.enable_subsampling:
             sub_edge_index = self.k_hop_subgraph(user_idxs_tensor, self.num_k_hops)
@@ -91,12 +91,6 @@ class MovieLensDataset(Dataset):
             sub_edge_index = self.train_edge_index
 
         return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
-
-    def sample_neg(self, x):
-        while True:
-            neg_id = random.randint(0, self.num_items - 1)
-            if neg_id not in x:
-                return neg_id
 
     def get_num_nodes(self):
         return self.num_users + self.num_items
@@ -112,7 +106,8 @@ class MovieLensDataModule(LightningDataModule):
                  split="simple",
                  enable_subsampling=False,
                  num_k_hops=2,
-                 hop_max_edges=1000
+                 hop_max_edges=1000,
+                 num_workers=6,
                  ):
         super().__init__()
         self.batch_size = batch_size
@@ -121,6 +116,7 @@ class MovieLensDataModule(LightningDataModule):
         self.num_k_hops = num_k_hops
         self.hop_max_edges = hop_max_edges
         self.device = device
+        self.num_workers = num_workers
 
         dataset_path = pathlib.Path(dataset_path)
         extract_from_archive(dataset_path, [RATINGS_FILE_CSV], dataset_path.parent)
@@ -207,7 +203,8 @@ class MovieLensDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=True,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
+                          num_workers=self.num_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset,
@@ -215,7 +212,8 @@ class MovieLensDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
+                          num_workers=self.num_workers)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset,
@@ -223,7 +221,8 @@ class MovieLensDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
+                          num_workers=self.num_workers)
 
     def collate_fn(self, batch):
         return batch

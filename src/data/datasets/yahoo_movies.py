@@ -77,7 +77,7 @@ class YahooMoviesDataset(Dataset):
         user_idxs_tensor = torch.tensor(user_idxs)
         sample_interacted_items = self.interacted_items_by_user_idx.loc[user_idxs]
         pos_item_idxs = sample_interacted_items.apply(lambda x: random.choice(x)).values
-        neg_item_idxs = sample_interacted_items.apply(lambda x: self.sample_neg(x)).values
+        neg_item_idxs = sample_interacted_items.apply(lambda x: random.randint(0, self.num_items - 1)).values
 
         if self.enable_subsampling:
             sub_edge_index = self.k_hop_subgraph(user_idxs_tensor, self.num_k_hops)
@@ -85,12 +85,6 @@ class YahooMoviesDataset(Dataset):
             sub_edge_index = self.train_edge_index
 
         return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
-
-    def sample_neg(self, x):
-        while True:
-            neg_id = random.randint(0, self.num_items - 1)
-            if neg_id not in x:
-                return neg_id
 
     def get_num_nodes(self):
         return self.num_users + self.num_items
@@ -106,7 +100,9 @@ class YahooMoviesDataModule(LightningDataModule):
                  device="cpu",
                  enable_subsampling=False,
                  num_k_hops=2,
-                 hop_max_edges=1000):
+                 hop_max_edges=1000,
+                 num_workers=6,
+                 ):
         super().__init__()
         if split != "simple":
             raise NotImplementedError("Only simple split is available.")
@@ -117,6 +113,7 @@ class YahooMoviesDataModule(LightningDataModule):
         self.num_k_hops = num_k_hops
         self.hop_max_edges = hop_max_edges
         self.device = device
+        self.num_workers = num_workers
 
         COLUMNS_NAME = ['user_id', 'item_id', 'full_rating', "rating"]
         self.pandas_data = pd.read_csv(dataset_path, sep=sep, names=COLUMNS_NAME, engine='python')
@@ -186,7 +183,8 @@ class YahooMoviesDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=True,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
+                          num_workers=self.num_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset,
@@ -194,7 +192,8 @@ class YahooMoviesDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
+                          num_workers=self.num_workers)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset,
@@ -202,7 +201,8 @@ class YahooMoviesDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
+                          num_workers=self.num_workers)
 
     def collate_fn(self, batch):
         return batch
