@@ -61,7 +61,7 @@ class MovieLensDataset(Dataset):
         user_idx = self.pandas_data["user_id_idx"].iloc[idx]
         row = self.interacted_items_by_user_idx.loc[user_idx]
         pos_item_idx = random.choice(row)
-        neg_item_idx = self.sample_neg(row)
+        neg_item_idx = random.randint(0, self.num_items - 1)
         return (torch.tensor(user_idx),
                 torch.tensor(pos_item_idx + self.num_users),
                 torch.tensor(neg_item_idx + self.num_users))
