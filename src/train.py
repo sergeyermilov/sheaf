@@ -60,7 +60,7 @@ DATASETS = {
 @click.option("--artifact-dir", default="artifact/", type=pathlib.Path)
 @click.option("--denoise", is_flag=True)
 @click.option("--checkpoint", is_flag=True)
-@click.option("--monitor_lr", is_flag=True)
+@click.option("--monitor-lr", is_flag=True)
 def main(model,
          dataset,
          dataset_params,

@@ -35,6 +35,8 @@ for SEED in $(seq 1 $SAMPLES); do
       --dataset $DATASET \
       --device $DEVICE \
       --epochs $EPOCHS \
+      --checkpoint \
+      --monitor-lr \
       --artifact-dir $ARTIFACT_DIR
   done;
 done;
