@@ -123,7 +123,7 @@ class YahooMoviesDataModule(LightningDataModule):
         self.pandas_data = self.pandas_data[self.pandas_data['rating'] >= 3]
 
         self.num_users = len(self.pandas_data.user_id.unique())
-        self.num_items = len(self.pandas_data.user_id.unique())
+        self.num_items = len(self.pandas_data.item_id.unique())
 
         # Train/val/test splitting
         train, test = train_test_split(self.pandas_data, test_size=0.2, random_state=random_state)
