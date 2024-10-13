@@ -107,7 +107,6 @@ class MovieLensDataModule(LightningDataModule):
                  enable_subsampling=False,
                  num_k_hops=2,
                  hop_max_edges=1000,
-                 num_workers=6,
                  ):
         super().__init__()
         self.batch_size = batch_size
@@ -116,7 +115,6 @@ class MovieLensDataModule(LightningDataModule):
         self.num_k_hops = num_k_hops
         self.hop_max_edges = hop_max_edges
         self.device = device
-        self.num_workers = num_workers
 
         dataset_path = pathlib.Path(dataset_path)
         extract_from_archive(dataset_path, [RATINGS_FILE_CSV], dataset_path.parent)
@@ -203,10 +201,7 @@ class MovieLensDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=True,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers,
-                          multiprocessing_context='spawn',
-                          persistent_workers=True)
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset,
@@ -214,10 +209,7 @@ class MovieLensDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers,
-                          multiprocessing_context='spawn',
-                          persistent_workers=True)
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset,
@@ -225,9 +217,7 @@ class MovieLensDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers,
-                          multiprocessing_context='spawn')
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def collate_fn(self, batch):
         return batch

@@ -101,7 +101,6 @@ class YahooMoviesDataModule(LightningDataModule):
                  enable_subsampling=False,
                  num_k_hops=2,
                  hop_max_edges=1000,
-                 num_workers=6,
                  ):
         super().__init__()
         if split != "simple":
@@ -113,7 +112,6 @@ class YahooMoviesDataModule(LightningDataModule):
         self.num_k_hops = num_k_hops
         self.hop_max_edges = hop_max_edges
         self.device = device
-        self.num_workers = num_workers
 
         COLUMNS_NAME = ['user_id', 'item_id', 'full_rating', "rating"]
         self.pandas_data = pd.read_csv(dataset_path, sep=sep, names=COLUMNS_NAME, engine='python')
@@ -183,9 +181,7 @@ class YahooMoviesDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=True,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers,
-                          multiprocessing_context='spawn')
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset,
@@ -193,9 +189,7 @@ class YahooMoviesDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers,
-                          multiprocessing_context='spawn')
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset,
@@ -203,9 +197,7 @@ class YahooMoviesDataModule(LightningDataModule):
                           collate_fn=self.collate_fn,
                           pin_memory=False,
                           shuffle=False,
-                          generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers,
-                          multiprocessing_context='spawn')
+                          generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def collate_fn(self, batch):
         return batch
