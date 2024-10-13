@@ -49,7 +49,7 @@ class MovieLensDataset(Dataset):
         self.train_edge_index = torch.stack((
             torch.cat([u_t, i_t]),
             torch.cat([i_t, u_t])
-        ))
+        )).to(self.device)
 
         # self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
         # self.adjacency_map = convert_edge_index_to_adjacency_map(self.train_edge_index)
@@ -205,7 +205,8 @@ class MovieLensDataModule(LightningDataModule):
                           shuffle=True,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state),
                           num_workers=self.num_workers,
-                          multiprocessing_context='spawn')
+                          multiprocessing_context='spawn',
+                          persistent_workers=True)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset,
@@ -215,7 +216,8 @@ class MovieLensDataModule(LightningDataModule):
                           shuffle=False,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state),
                           num_workers=self.num_workers,
-                          multiprocessing_context='spawn')
+                          multiprocessing_context='spawn',
+                          persistent_workers=True)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset,
