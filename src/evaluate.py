@@ -150,7 +150,7 @@ def main(device, artifact_id, artifact_dir, model_name):
         columns={"item_id_idx": "interacted_id_idx"})
     res = res.merge(interactions, on=["user_id_idx"])
 
-    if not hasattr(model, "evaluate"):
+    if not hasattr(model_instance, "evaluate"):
         with torch.no_grad():
             if denoise:
                 embeddings = model_instance.get_denoised_embeddings()
@@ -163,7 +163,7 @@ def main(device, artifact_id, artifact_dir, model_name):
 
             compute_recs_fn = lambda x, k: infer_dotprod(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k)
     else:
-        compute_recs_fn = lambda x, k: model.evaluate(x["interacted_id_idx"], k)
+        compute_recs_fn = lambda x, k: model_instance.evaluate(x["interacted_id_idx"], k)
 
     res, metrics_5 = get_metrics(res, 5, compute_recs_fn)
     res, metrics_10 = get_metrics(res, 10, compute_recs_fn)
