@@ -1,9 +1,5 @@
 #!/bin/bash
 
-#CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=0 bash scripts/sheaf_eval_gcn.sh cuda FACEBOOK 40 40 1024 8
-#CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=0 bash scripts/sheaf_eval_gcn.sh cuda YAHOO 30 40 16000 6 3 "[16000,64000,128000]"
-#CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=0 bash scripts/sheaf_eval_gcn.sh cuda MOVIELENS1M 30 40 10000 6 3 "[10000,40000,80000]"
-
 DEVICE=$1
 DATASET=$2
 EPOCHS=$3
@@ -26,15 +22,11 @@ echo "BATCH_SIZE = $BATCH_SIZE"
 
 ARTIFACT_DIR="./GCN_${DATASET}_${EPOCHS}_$(date +%s)"
 
-#LAYER_TYPES=("['hetero_global']" "['homo_global']" "['homo_simple_ffn']" "['hetero_simple_ffn']" "['hetero_global','hetero_simple_ffn']" "['homo_global','homo_simple_ffn']")
-# LAYER_TYPES=("['hetero_global']" "['hetero_simple_ffn']" "['hetero_global','hetero_simple_ffn']")
 
 for SEED in $(seq 1 $SAMPLES); do
-#  python -m src.train --model TopKPopularity --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-#  python -m src.train --model EASE --model-params "{'lambda_reg':250}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model GAT --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
-#  python -m src.train --model SheafGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
   python -m src.train --model LightGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
+  # python -m src.train --model SheafGCN --model-params "{'latent_dim':$LATENT_DIMS}" --dataset-params "{'random_state':$SEED, 'batch_size':$BATCH_SIZE $ENABLE_SUBSAMPLING_CMD}" --dataset $DATASET --device $DEVICE --epochs $EPOCHS --artifact-dir $ARTIFACT_DIR
 done;
 
 
