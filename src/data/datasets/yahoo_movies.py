@@ -184,7 +184,8 @@ class YahooMoviesDataModule(LightningDataModule):
                           pin_memory=False,
                           shuffle=True,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers)
+                          num_workers=self.num_workers,
+                          multiprocessing_context='spawn')
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset,
@@ -193,7 +194,8 @@ class YahooMoviesDataModule(LightningDataModule):
                           pin_memory=False,
                           shuffle=False,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers)
+                          num_workers=self.num_workers,
+                          multiprocessing_context='spawn')
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset,
@@ -202,7 +204,8 @@ class YahooMoviesDataModule(LightningDataModule):
                           pin_memory=False,
                           shuffle=False,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state),
-                          num_workers=self.num_workers)
+                          num_workers=self.num_workers,
+                          multiprocessing_context='spawn')
 
     def collate_fn(self, batch):
         return batch
