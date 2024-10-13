@@ -48,7 +48,7 @@ def as_numpy(torch_tensor):
 def infer_dotprod(user_idx, users_embed, items_embed, interacted, k):
     scores = torch.matmul(users_embed[user_idx], torch.transpose(items_embed, 0, 1))
     scores[interacted] = -torch.inf
-    return as_numpy(scores.argsort(descending=True))[:k]
+    return as_numpy(scores.argsort(descending=True))[:k].tolist()
 
 
 def dcg_at_k(score, k=None):
@@ -83,7 +83,7 @@ def get_metrics(_df: pd.DataFrame, k: int, compute_recs_fn: typing.Callable):
     _df[recall_k] = _df.apply(lambda x: len(x[f"intersected_{k}"]) / len(x["item_id_idx"]), axis=1)
     _df[precision_k] = _df.apply(lambda x: len(x[f"intersected_{k}"]) / k, axis=1)
 
-    _df[ranks_k] = _df.apply(lambda x: [int(movie_id in x[f"reco_{k}"]) for movie_id in x["item_id_idx"]], axis=1)
+    _df[ranks_k] = _df.apply(lambda x: [int(reco_idx in x["item_id_idx"]) for reco_idx in x[f"reco_{k}"]], axis=1)
     _df[ndcg_k] = _df.apply(lambda x: ndcg_at_k(x[f'ranks_{k}'], k), axis=1).fillna(0.0)
 
     return _df, [recall_k, precision_k, ndcg_k]
@@ -145,13 +145,9 @@ def main(device, artifact_id, artifact_dir, model_name):
     model_instance.eval()
     model_instance = model_instance.to(device)
 
-    interacted_items_by_user_idx = test_dataset.interacted_items_by_user_idx.reset_index()
-
-    res = interacted_items_by_user_idx.copy(deep=True)
-    interactions = (interacted_items_by_user_idx
-                    .copy(deep=True)
-                    .rename(columns={"item_id_idx": "interacted_id_idx"}))
-
+    res = test_dataset.interacted_items_by_user_idx.copy(deep=True).reset_index()
+    interactions = train_dataset.interacted_items_by_user_idx.copy(deep=True).reset_index().rename(
+        columns={"item_id_idx": "interacted_id_idx"})
     res = res.merge(interactions, on=["user_id_idx"])
 
     if not hasattr(model, "evaluate"):
@@ -162,7 +158,7 @@ def main(device, artifact_id, artifact_dir, model_name):
                 _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
 
             user_embeddings, item_embeddings = torch.split(
-                embeddings, [train_dataset.num_users, train_dataset.num_items]
+                embeddings, [test_dataset.num_users, test_dataset.num_items]
             )
 
             compute_recs_fn = lambda x, k: infer_dotprod(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k)

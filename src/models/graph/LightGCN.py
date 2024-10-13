@@ -30,9 +30,11 @@ class LightGCNConv(MessagePassing):
 class LightGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
-                 dataset):
+                 dataset,
+                 alpha=0.01):
         super(LightGCN, self).__init__()
         self.dataset = dataset
+        self.alpha = alpha
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.conv1 = LightGCNConv()
         self.conv2 = LightGCNConv()
@@ -65,7 +67,7 @@ class LightGCN(pl.LightningModule):
 
         users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0 = self.encode_minibatch(start_nodes, pos_items, neg_items, edge_index)
         bpr_loss, reg_loss = compute_bpr_loss_with_reg(start_nodes, users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0)
-        final_loss = bpr_loss + 0.05 * reg_loss
+        final_loss = bpr_loss + self.alpha * reg_loss
         self.log(f'{suffix}_loss', final_loss)
         self.log(f'{suffix}_bpr_loss', bpr_loss)
         self.log(f'{suffix}_reg_loss', reg_loss)

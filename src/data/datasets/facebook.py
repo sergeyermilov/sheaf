@@ -17,8 +17,6 @@ class FacebookDataset(Dataset):
 
         # Unique user and items ids as numpy array
         self.pandas_data = df
-        self.user_ids = self.pandas_data.user_id.unique()
-        self.item_ids = self.pandas_data.item_id.unique()
 
         self.num_users = num_users
         self.num_items = num_items
@@ -34,7 +32,7 @@ class FacebookDataset(Dataset):
             torch.cat([i_t, u_t])
         ))
 
-        self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
+        self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.get_num_nodes()))
 
     def __len__(self):
         return self.pandas_data.shape[0]
