@@ -30,9 +30,11 @@ class LightGCNConv(MessagePassing):
 class LightGCN(pl.LightningModule):
     def __init__(self,
                  latent_dim,
-                 dataset):
+                 dataset,
+                 alpha=0.01):
         super(LightGCN, self).__init__()
         self.dataset = dataset
+        self.alpha = alpha
         self.embedding = nn.Embedding(dataset.num_users + dataset.num_items, latent_dim)
         self.conv1 = LightGCNConv()
         self.conv2 = LightGCNConv()
@@ -54,7 +56,7 @@ class LightGCN(pl.LightningModule):
        out = (torch.mean(torch.stack(embs, dim=0), dim=0))
        return emb0, out
 
-    def training_step(self, batch, batch_idx):
+    def do_step(self, batch, batch_idx, suffix):
         if len(batch) == 3:
             start_nodes, pos_items, neg_items = batch
             edge_index = self.edge_index
@@ -65,14 +67,26 @@ class LightGCN(pl.LightningModule):
 
         users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0 = self.encode_minibatch(start_nodes, pos_items, neg_items, edge_index)
         bpr_loss, reg_loss = compute_bpr_loss_with_reg(start_nodes, users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0)
-        final_loss = bpr_loss + reg_loss
-        self.log('final_loss', final_loss)
-        self.log('bpr_loss', bpr_loss)
-        self.log('reg_loss', reg_loss)
+        final_loss = bpr_loss + self.alpha * reg_loss
+        self.log(f'{suffix}_loss', final_loss)
+        self.log(f'{suffix}_bpr_loss', bpr_loss)
+        self.log(f'{suffix}_reg_loss', reg_loss)
         return final_loss
 
+    def training_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "train")
+
+    def validation_step(self, batch, batch_idx):
+        return self.do_step(batch, batch_idx, "val")
+
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss"
+        }
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         emb0, out = self.forward(edge_index)

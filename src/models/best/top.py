@@ -1,5 +1,4 @@
 import pytorch_lightning as pl
-from torch.nn.modules.module import T
 
 
 class TopKPopularity(pl.LightningModule):
@@ -13,6 +12,9 @@ class TopKPopularity(pl.LightningModule):
         return self.top
 
     def training_step(self, batch, batch_idx):
+        return None
+
+    def validation_step(self, batch, batch_idx):
         return None
 
     def configure_optimizers(self):
