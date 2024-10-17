@@ -237,7 +237,7 @@ class ExtendableSheafGCN(pl.LightningModule):
         self.sheaf_conv.set_current_epoch(self.current_epoch)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01, weight_decay=0.01)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
         return {
             "optimizer": optimizer,
