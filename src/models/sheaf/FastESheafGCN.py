@@ -1,5 +1,8 @@
+from typing import Any
+
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch_geometric.nn import SimpleConv
 
@@ -71,8 +74,7 @@ class FastESheafGCN(pl.LightningModule):
         out = self.conv1(emb1, edge_index)
         return emb0, out
 
-
-    def training_step(self, batch):
+    def do_step(self, batch, suffix):
         users, pos_items, neg_items, sub_edge_index = batch
         emb0, embs, users_emb, pos_emb, neg_emb = self.encode_minibatch(users,
                                                                         pos_items,
@@ -80,12 +82,24 @@ class FastESheafGCN(pl.LightningModule):
                                                                         sub_edge_index)
         bpr_loss = compute_bpr_loss(users, users_emb, pos_emb, neg_emb)
         loss = bpr_loss
-        self.log('bpr_loss', bpr_loss)
-        self.log('loss', loss)
+        self.log(f'{suffix}_bpr_loss', bpr_loss)
+        self.log(f'{suffix}_loss', loss)
         return loss
 
+    def training_step(self, batch):
+        return self.do_step(batch, "train")
+
+    def validation_step(self, batch):
+        return self.do_step(batch, "val")
+
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss"
+        }
 
     def encode_minibatch(self, users, pos_items, neg_items, edge_index):
         emb0, out = self.forward(edge_index)

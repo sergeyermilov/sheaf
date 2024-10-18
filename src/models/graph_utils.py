@@ -49,7 +49,7 @@ def k_hop_subgraph_limit(
 
         if hop_max_edges[hop] != -1:
             mask_ix = torch.argwhere(edge_mask[:half] & ~edge_mask_subsets[:half])
-            rand_ix = torch.randperm(mask_ix.shape[0], generator=rng)[:hop_max_edges[hop]]
+            rand_ix = torch.randperm(mask_ix.shape[0], generator=rng, device=row.device)[:hop_max_edges[hop]]
 
             # fill the first half (sample restricted by size)
             edge_mask[...] = False

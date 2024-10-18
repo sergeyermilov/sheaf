@@ -1,4 +1,7 @@
 import os
+import typing
+from functools import partial
+
 import torch
 import click
 import json
@@ -42,11 +45,10 @@ def as_numpy(torch_tensor):
     return torch_tensor.cpu().numpy()
 
 
-def evaluate(user_idx, final_user_Embed, final_item_Embed, interacted, k):
-    user_emb = final_user_Embed[user_idx]
-    scores = torch.matmul(user_emb, torch.transpose(final_item_Embed, 0, 1))
-    scores[interacted] = 0.0
-    return as_numpy(scores.argsort(descending=True))[:k]
+def infer_dotprod(user_idx, users_embed, items_embed, interacted, k):
+    scores = torch.matmul(users_embed[user_idx], torch.transpose(items_embed, 0, 1))
+    scores[interacted] = -torch.inf
+    return as_numpy(scores.argsort(descending=True))[:k].tolist()
 
 
 def dcg_at_k(score, k=None):
@@ -66,27 +68,22 @@ def ndcg_at_k(score, k=None):
     return ndcg
 
 
-def get_metrics(_df, k, user_embeddings, item_embeddings, model, is_alternate_evaluation=False):
+def get_metrics(_df: pd.DataFrame, k: int, compute_recs_fn: typing.Callable):
     reco_k = f"reco_{k}"
     intersected_k = f"intersected_{k}"
     recall_k = f"recall_{k}"
     precision_k = f"precision_{k}"
-    ranks_k = f'ranks_{k}'
+    ranks_k = f"ranks_{k}"
     ndcg_k = f"ndcg_{k}"
 
-    if is_alternate_evaluation:
-        _df[reco_k] = _df.progress_apply(
-            lambda x: model.evaluate(x["interacted_id_idx"], k), axis=1)
-    else:
-        _df[reco_k] = _df.progress_apply(
-            lambda x: evaluate(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k), axis=1)
+    _df[reco_k] = _df.progress_apply(partial(compute_recs_fn, k=k), axis=1)
 
     _df[intersected_k] = _df.apply(lambda x: list(set(x[f"reco_{k}"]).intersection(x["item_id_idx"])), axis=1)
 
     _df[recall_k] = _df.apply(lambda x: len(x[f"intersected_{k}"]) / len(x["item_id_idx"]), axis=1)
     _df[precision_k] = _df.apply(lambda x: len(x[f"intersected_{k}"]) / k, axis=1)
 
-    _df[ranks_k] = _df.apply(lambda x: [int(movie_id in x[f"reco_{k}"]) for movie_id in x["item_id_idx"]], axis=1)
+    _df[ranks_k] = _df.apply(lambda x: [int(reco_idx in x["item_id_idx"]) for reco_idx in x[f"reco_{k}"]], axis=1)
     _df[ndcg_k] = _df.apply(lambda x: ndcg_at_k(x[f'ranks_{k}'], k), axis=1).fillna(0.0)
 
     return _df, [recall_k, precision_k, ndcg_k]
@@ -123,7 +120,6 @@ def main(device, artifact_id, artifact_dir, model_name):
     print(f"device = {device}")
     print(f"artifact-dir = {artifact_dir}")
     print(f"denoise = {denoise}")
-
     print("------------------------------------------------")
 
     if os.getenv("CUDA_VISIBLE_DEVICE"):
@@ -144,34 +140,35 @@ def main(device, artifact_id, artifact_dir, model_name):
     test_dataset = ml_data_module.test_dataset
 
     model_instance = MODELS[model].load_from_checkpoint(
-        artifact_dir.joinpath(f"checkpoints/{model_name}"), dataset=train_dataset, **model_params
+        artifact_dir.joinpath(f"{model_name}"), dataset=train_dataset, **model_params
     )
     model_instance.eval()
     model_instance = model_instance.to(device)
 
-    res = test_dataset.interacted_items_by_user_idx.copy(deep=True)
-    interactions = train_dataset.interacted_items_by_user_idx.copy(deep=True).rename(
+    res = test_dataset.interacted_items_by_user_idx.copy(deep=True).reset_index()
+    interactions = train_dataset.interacted_items_by_user_idx.copy(deep=True).reset_index().rename(
         columns={"item_id_idx": "interacted_id_idx"})
     res = res.merge(interactions, on=["user_id_idx"])
 
-    is_alternate_evaluation = True if model in ["TopKPopularity", "EASE"] else False
-    user_embeddings = None
-    item_embeddings = None
-
-    if not is_alternate_evaluation:
+    if not hasattr(model_instance, "evaluate"):
         with torch.no_grad():
             if denoise:
                 embeddings = model_instance.get_denoised_embeddings()
             else:
                 _, embeddings = model_instance(train_dataset.train_edge_index.to(device))
 
-            user_embeddings, item_embeddings = torch.split(embeddings,
-                                                           (train_dataset.num_users, train_dataset.num_items))
+            user_embeddings, item_embeddings = torch.split(
+                embeddings, [test_dataset.num_users, test_dataset.num_items]
+            )
 
-    res, metrics_5 = get_metrics(res, 5, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
-    res, metrics_10 = get_metrics(res, 10, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
-    res, metrics_20 = get_metrics(res, 20, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
-    res, metrics_50 = get_metrics(res, 50, user_embeddings, item_embeddings, model_instance, is_alternate_evaluation)
+            compute_recs_fn = lambda x, k: infer_dotprod(x["user_id_idx"], user_embeddings, item_embeddings, x["interacted_id_idx"], k)
+    else:
+        compute_recs_fn = lambda x, k: model_instance.evaluate(x["interacted_id_idx"], k)
+
+    res, metrics_5 = get_metrics(res, 5, compute_recs_fn)
+    res, metrics_10 = get_metrics(res, 10, compute_recs_fn)
+    res, metrics_20 = get_metrics(res, 20, compute_recs_fn)
+    res, metrics_50 = get_metrics(res, 50, compute_recs_fn)
 
     os.makedirs(artifact_dir.joinpath(f"reports"), exist_ok=True)
 

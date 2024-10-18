@@ -19,6 +19,8 @@ MOVIE_LENS_10M_DATASET_RELATIVE_PATH = "ml-10m/ml-10m.tar.gz"
 
 class MovieLensDataset(Dataset):
     def __init__(self, df,
+                 num_users,
+                 num_items,
                  random_state=42,
                  enable_subsampling=False,
                  num_k_hops=2,
@@ -32,16 +34,14 @@ class MovieLensDataset(Dataset):
 
         # Unique user and items ids as numpy array
         self.pandas_data = df
-        self.user_ids = self.pandas_data.user_id.unique()
-        self.item_ids = self.pandas_data.item_id.unique()
 
-        self.num_users = len(self.user_ids)
-        self.num_items = len(self.item_ids)
+        self.num_users = num_users
+        self.num_items = num_items
+
         self.random_state = random_state
 
         # Create graph
-        self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(
-            list).reset_index()
+        self.interacted_items_by_user_idx = self.pandas_data.groupby('user_id_idx')['item_id_idx'].apply(list)
 
         u_t = torch.tensor(self.pandas_data.user_id_idx.values, dtype=torch.long)
         i_t = torch.tensor(self.pandas_data.item_id_idx.values, dtype=torch.long) + self.num_users
@@ -49,7 +49,7 @@ class MovieLensDataset(Dataset):
         self.train_edge_index = torch.stack((
             torch.cat([u_t, i_t]),
             torch.cat([i_t, u_t])
-        ))
+        )).to(self.device)
 
         # self.adjacency_matrix = torch.squeeze(to_dense_adj(self.train_edge_index, max_num_nodes=self.num_items + self.num_users))
         # self.adjacency_map = convert_edge_index_to_adjacency_map(self.train_edge_index)
@@ -59,12 +59,12 @@ class MovieLensDataset(Dataset):
 
     def __getitem__(self, idx):
         user_idx = self.pandas_data["user_id_idx"].iloc[idx]
-        row = self.interacted_items_by_user_idx.iloc[user_idx]
-        user_idx = row["user_id_idx"]
-        pos_item_idx = random.choice(row["item_id_idx"])
-        neg_item_idx = self.sample_neg(row["item_id_idx"])
-        return torch.tensor(user_idx), torch.tensor(pos_item_idx + self.num_users), torch.tensor(
-            neg_item_idx + self.num_users)
+        row = self.interacted_items_by_user_idx.loc[user_idx]
+        pos_item_idx = random.choice(row)
+        neg_item_idx = random.randint(0, self.num_items - 1)
+        return (torch.tensor(user_idx),
+                torch.tensor(pos_item_idx + self.num_users),
+                torch.tensor(neg_item_idx + self.num_users))
 
     def k_hop_subgraph(self, user_idxs_tensor, num_hops):
         sub_edge_index, _ = k_hop_subgraph_limit(
@@ -81,9 +81,9 @@ class MovieLensDataset(Dataset):
         sample = self.pandas_data.iloc[indices]
         user_idxs = sample["user_id_idx"].values
         user_idxs_tensor = torch.tensor(user_idxs)
-        sample_interacted_items = self.interacted_items_by_user_idx.iloc[user_idxs]
-        pos_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: random.choice(x)).values
-        neg_item_idxs = sample_interacted_items["item_id_idx"].apply(lambda x: self.sample_neg(x)).values
+        sample_interacted_items = self.interacted_items_by_user_idx.loc[user_idxs]
+        pos_item_idxs = sample_interacted_items.apply(lambda x: random.choice(x)).values
+        neg_item_idxs = sample_interacted_items.apply(lambda x: random.randint(0, self.num_items - 1)).values
 
         if self.enable_subsampling:
             sub_edge_index = self.k_hop_subgraph(user_idxs_tensor, self.num_k_hops)
@@ -91,12 +91,6 @@ class MovieLensDataset(Dataset):
             sub_edge_index = self.train_edge_index
 
         return torch.tensor(user_idxs), torch.tensor(pos_item_idxs), torch.tensor(neg_item_idxs), sub_edge_index
-
-    def sample_neg(self, x):
-        while True:
-            neg_id = random.randint(0, self.num_items - 1)
-            if neg_id not in x:
-                return neg_id
 
     def get_num_nodes(self):
         return self.num_users + self.num_items
@@ -112,7 +106,7 @@ class MovieLensDataModule(LightningDataModule):
                  split="simple",
                  enable_subsampling=False,
                  num_k_hops=2,
-                 hop_max_edges=1000
+                 hop_max_edges=1000,
                  ):
         super().__init__()
         self.batch_size = batch_size
@@ -131,6 +125,9 @@ class MovieLensDataModule(LightningDataModule):
         COLUMNS_NAME = ['user_id', 'item_id', 'rating', "timestamp"]
         self.pandas_data = pd.read_csv(ratings_file, sep=sep, names=COLUMNS_NAME, engine='python')
         self.pandas_data = self.pandas_data[self.pandas_data['rating'] >= 3]
+
+        self.num_users = len(self.pandas_data.user_id.unique())
+        self.num_items = len(self.pandas_data.item_id.unique())
 
         # Train/val/test splitting
         if split == "simple":
@@ -175,17 +172,24 @@ class MovieLensDataModule(LightningDataModule):
     def setup(self):
         # Assign train/val datasets for use in dataloaders
         self.train_dataset = MovieLensDataset(self.train_df,
+                                              num_users=self.num_users,
+                                              num_items=self.num_items,
                                               enable_subsampling=self.enable_subsampling,
                                               num_k_hops=self.num_k_hops,
                                               hop_max_edges=self.hop_max_edges,
                                               device=self.device)
+
         self.val_dataset = MovieLensDataset(self.val_df,
+                                            num_users=self.num_users,
+                                            num_items=self.num_items,
                                             enable_subsampling=self.enable_subsampling,
                                             num_k_hops=self.num_k_hops,
                                             hop_max_edges=self.hop_max_edges,
                                             device=self.device)
 
         self.test_dataset = MovieLensDataset(self.test_df,
+                                             num_users=self.num_users,
+                                             num_items=self.num_items,
                                              enable_subsampling=self.enable_subsampling,
                                              num_k_hops=self.num_k_hops,
                                              hop_max_edges=self.hop_max_edges,
@@ -204,7 +208,7 @@ class MovieLensDataModule(LightningDataModule):
                           batch_size=self.batch_size,
                           collate_fn=self.collate_fn,
                           pin_memory=False,
-                          shuffle=True,
+                          shuffle=False,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def test_dataloader(self):
@@ -212,7 +216,7 @@ class MovieLensDataModule(LightningDataModule):
                           batch_size=self.batch_size,
                           collate_fn=self.collate_fn,
                           pin_memory=False,
-                          shuffle=True,
+                          shuffle=False,
                           generator=torch.Generator(device=self.device).manual_seed(self.random_state))
 
     def collate_fn(self, batch):

@@ -20,11 +20,14 @@ echo "DATASET = $DATASET"
 echo "EPOCHS = $EPOCHS"
 echo "LATENT_DIMS = $LATENT_DIMS"
 echo "BATCH_SIZE = $BATCH_SIZE"
+echo "DEPTH = $DEPTH"
+echo "SAMPLES = $SAMPLES"
 
 ARTIFACT_DIR="./SHEAF_${DATASET}_${EPOCHS}_$(date +%s)"
 
 #LAYER_TYPES=("['hetero_global']" "['homo_global']" "['homo_simple_ffn']" "['hetero_simple_ffn']" "['hetero_global','hetero_simple_ffn']" "['homo_global','homo_simple_ffn']")
 LAYER_TYPES=("['hetero_simple_ffn']" "['hetero_global']" "['hetero_global','hetero_simple_ffn']")
+#LAYER_TYPES=("['hetero_global']")
 
 for SEED in $(seq 1 $SAMPLES); do
   for LAYER in "${LAYER_TYPES[@]}"; do
@@ -35,6 +38,8 @@ for SEED in $(seq 1 $SAMPLES); do
       --dataset $DATASET \
       --device $DEVICE \
       --epochs $EPOCHS \
+      --checkpoint \
+      --monitor-lr \
       --artifact-dir $ARTIFACT_DIR
   done;
 done;
